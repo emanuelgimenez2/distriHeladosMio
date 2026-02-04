@@ -16,6 +16,7 @@ import {
 } from '@/services/clients-service'
 import {
   getSales,
+  getSalesBySeller,
   processSale,
 } from '@/services/sales-service'
 import { registerCashPayment } from '@/services/payments-service'
@@ -31,7 +32,7 @@ import {
   updateSeller,
 } from '@/services/sellers-service'
 import { getDashboardStats, getDebtors, getLowStockProducts } from '@/services/dashboard-service'
-import { createInvoice } from '@/services/invoice-service'
+import { createInvoice, createRemito } from '@/services/invoice-service'
 import { getOrders, updateOrderStatus } from '@/services/orders-service'
 import { doc, updateDoc } from 'firebase/firestore'
 import { firestore } from '@/lib/firebase'
@@ -79,6 +80,9 @@ export const salesApi = {
   async getAll(): Promise<Sale[]> {
     return getSales()
   },
+  async getBySeller(sellerId: string): Promise<Sale[]> {
+    return getSalesBySeller(sellerId)
+  },
   async processSale(data: {
     clientId?: string
     clientName?: string
@@ -87,6 +91,8 @@ export const salesApi = {
     sellerName?: string
     items: CartItem[]
     paymentType: 'cash' | 'credit'
+    source?: 'direct' | 'order'
+    createOrder?: boolean
   }): Promise<Sale> {
     return processSale(data)
   },
@@ -116,6 +122,17 @@ export const paymentsApi = {
 export const invoiceApi = {
   async createInvoice(saleId: string, client?: { name?: string; phone?: string; email?: string }) {
     return salesApi.emitInvoice(saleId, client)
+  },
+}
+
+export const remitoApi = {
+  async createRemito(saleId: string) {
+    const remito = await createRemito({ saleId })
+    await updateDoc(doc(firestore, 'ventas', saleId), {
+      remitoNumber: remito.remitoNumber,
+      remitoPdfUrl: remito.pdfUrl,
+    })
+    return remito
   },
 }
 

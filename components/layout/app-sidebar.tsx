@@ -15,7 +15,6 @@ import {
   X,
   Receipt,
   UserCheck,
-  HandCoins,
 } from 'lucide-react'
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
@@ -35,9 +34,9 @@ export function AppSidebar() {
     { href: '/ventas', label: 'Ventas', icon: Receipt },
     { href: '/ventas/nueva', label: 'Nueva Venta', icon: ShoppingCart },
     { href: '/pedidos', label: 'Pedidos', icon: Truck },
-    { href: '/comisiones', label: 'Mis Comisiones', icon: HandCoins, roles: ['seller'] },
+    // Comisiones se gestionan dentro de Vendedores
     // Tienda Online es pública, fuera del panel admin
-  ].filter((item) => !item.roles || item.roles.includes(user?.role ?? 'seller'))
+  ].filter((item) => !item.roles || item.roles.includes(user?.role ?? 'customer'))
 
   return (
     <>

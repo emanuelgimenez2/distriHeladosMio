@@ -1,4 +1,4 @@
-import { doc, getDoc, serverTimestamp, setDoc } from 'firebase/firestore'
+import { collection, doc, getDoc, getDocs, query, serverTimestamp, setDoc, where } from 'firebase/firestore'
 import { firestore } from '@/lib/firebase'
 import type { User, UserRole } from '@/lib/types'
 import { toDate } from '@/services/firestore-helpers'
@@ -27,11 +27,17 @@ export const ensureUserProfile = async (data: {
   const existing = await getUserProfile(data.id)
   if (existing) return existing
 
+  const sellersSnapshot = await getDocs(
+    query(collection(firestore, 'vendedores'), where('email', '==', data.email))
+  )
+  const matchingSeller = sellersSnapshot.docs[0]?.id
+
   const profile: User = {
     id: data.id,
     email: data.email,
     name: data.name,
-    role: data.role ?? 'seller',
+    role: data.role ?? 'customer',
+    sellerId: matchingSeller,
     isActive: true,
     createdAt: new Date(),
   }

@@ -32,8 +32,8 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Switch } from '@/components/ui/switch'
-import { sellersApi } from '@/lib/api'
-import type { Seller, SellerCommission } from '@/lib/types'
+import { sellersApi, salesApi } from '@/lib/api'
+import type { Sale, Seller, SellerCommission } from '@/lib/types'
 import {
   Plus,
   Search,
@@ -63,6 +63,8 @@ export default function VendedoresPage() {
   const [selectedSeller, setSelectedSeller] = useState<Seller | null>(null)
   const [commissions, setCommissions] = useState<SellerCommission[]>([])
   const [loadingCommissions, setLoadingCommissions] = useState(false)
+  const [sales, setSales] = useState<Sale[]>([])
+  const [loadingSales, setLoadingSales] = useState(false)
   const [payingAll, setPayingAll] = useState(false)
 
   // Form state
@@ -101,10 +103,22 @@ export default function VendedoresPage() {
     }
   }
 
+  const loadSellerSales = async (sellerId: string) => {
+    setLoadingSales(true)
+    try {
+      const data = await salesApi.getBySeller(sellerId)
+      setSales(data.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()))
+    } catch (error) {
+      console.error('Error loading sales:', error)
+    } finally {
+      setLoadingSales(false)
+    }
+  }
+
   const handleViewDetail = async (seller: Seller) => {
     setSelectedSeller(seller)
     setShowDetailModal(true)
-    await loadSellerCommissions(seller.id)
+    await Promise.all([loadSellerCommissions(seller.id), loadSellerSales(seller.id)])
   }
 
   const handlePayCommission = async (commissionId: string) => {
@@ -206,6 +220,10 @@ export default function VendedoresPage() {
       month: '2-digit',
       year: 'numeric',
     })
+  }
+
+  const formatPaymentType = (type: Sale['paymentType']) => {
+    return type === 'cash' ? 'Efectivo' : 'Cuenta Corriente'
   }
 
   const filteredSellers = sellers.filter(seller =>
@@ -613,6 +631,67 @@ export default function VendedoresPage() {
                                 >
                                   Pagar
                                 </Button>
+                              )}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Sales List */}
+              <Card className="mt-4">
+                <CardHeader>
+                  <CardTitle className="text-base">Ventas del Vendedor</CardTitle>
+                </CardHeader>
+                <CardContent className="p-0">
+                  {loadingSales ? (
+                    <div className="p-8 text-center">
+                      <Loader2 className="h-6 w-6 animate-spin mx-auto text-muted-foreground" />
+                    </div>
+                  ) : sales.length === 0 ? (
+                    <p className="p-8 text-center text-muted-foreground">
+                      No hay ventas registradas
+                    </p>
+                  ) : (
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Fecha</TableHead>
+                          <TableHead>Cliente</TableHead>
+                          <TableHead className="text-right">Total</TableHead>
+                          <TableHead className="text-center">Pago</TableHead>
+                          <TableHead className="text-center">Boleta</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {sales.map((sale) => (
+                          <TableRow key={sale.id}>
+                            <TableCell className="text-foreground">
+                              {formatDate(sale.createdAt)}
+                            </TableCell>
+                            <TableCell className="text-foreground">
+                              {sale.clientName || 'Venta directa'}
+                            </TableCell>
+                            <TableCell className="text-right text-foreground">
+                              {formatPrice(sale.total)}
+                            </TableCell>
+                            <TableCell className="text-center">
+                              <Badge variant={sale.paymentType === 'cash' ? 'default' : 'secondary'}>
+                                {formatPaymentType(sale.paymentType)}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-center">
+                              {sale.invoiceEmitted ? (
+                                <Badge variant="outline" className="text-success border-success">
+                                  Emitida
+                                </Badge>
+                              ) : (
+                                <Badge variant="outline" className="text-warning border-warning">
+                                  Pendiente
+                                </Badge>
                               )}
                             </TableCell>
                           </TableRow>

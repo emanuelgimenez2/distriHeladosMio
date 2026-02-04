@@ -23,7 +23,7 @@ export async function POST(request: Request) {
   let clientId: string | null = null
   let clientName = name
 
-  const existingClientSnap = await adminDb.collection('clientes').where('cuit', '==', dni).limit(1).get()
+  const existingClientSnap = await adminDb.collection('clientes').where('dni', '==', dni).limit(1).get()
   if (!existingClientSnap.empty) {
     const doc = existingClientSnap.docs[0]
     clientId = doc.id
@@ -32,10 +32,12 @@ export async function POST(request: Request) {
   } else {
     const clientRef = await adminDb.collection('clientes').add({
       name,
+      dni,
       cuit: dni,
       email,
       phone,
       address,
+      taxCategory: 'consumidor_final',
       creditLimit: 0,
       currentBalance: 0,
       createdAt: new Date(),
@@ -43,10 +45,26 @@ export async function POST(request: Request) {
     clientId = clientRef.id
   }
 
+  const sellerEmail = String(body.sellerEmail || '').trim().toLowerCase()
+  let sellerId: string | null = null
+  let sellerName: string | null = null
+
+  if (sellerEmail) {
+    const sellerSnap = await adminDb.collection('vendedores').where('email', '==', sellerEmail).limit(1).get()
+    if (!sellerSnap.empty) {
+      const sellerDoc = sellerSnap.docs[0]
+      const sellerData = sellerDoc.data()
+      sellerId = sellerDoc.id
+      sellerName = sellerData.name || null
+    }
+  }
+
   const orderRef = await adminDb.collection('pedidos').add({
     saleId: null,
     clientId,
     clientName,
+    sellerId,
+    sellerName,
     items: body.items,
     status: 'pending',
     address,

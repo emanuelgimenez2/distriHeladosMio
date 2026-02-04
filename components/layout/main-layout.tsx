@@ -24,6 +24,12 @@ export function MainLayout({ children, title, description }: MainLayoutProps) {
     }
   }, [loading, user, router])
 
+  useEffect(() => {
+    if (!loading && user?.role === 'customer') {
+      router.push('/')
+    }
+  }, [loading, user, router])
+
   if (loading || !user) {
     return (
       <div className="min-h-screen bg-background p-6 lg:p-8">

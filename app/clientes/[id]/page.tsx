@@ -142,7 +142,7 @@ export default function ClientDetailPage() {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
@@ -181,6 +181,23 @@ export default function ClientDetailPage() {
           <CardContent>
             <p className="text-sm text-foreground">{client.email}</p>
             <p className="text-sm text-muted-foreground">{client.phone}</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">
+              Categoría Fiscal
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-foreground">
+              {client.taxCategory === 'responsable_inscripto' && 'Resp. Inscripto'}
+              {client.taxCategory === 'monotributo' && 'Monotributo'}
+              {client.taxCategory === 'consumidor_final' && 'Consumidor Final'}
+              {client.taxCategory === 'exento' && 'Exento'}
+              {client.taxCategory === 'no_responsable' && 'No Responsable'}
+            </div>
           </CardContent>
         </Card>
       </div>

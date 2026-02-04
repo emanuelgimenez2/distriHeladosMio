@@ -29,7 +29,9 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog"
-import { salesApi } from "@/lib/api"
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
+import { Label } from "@/components/ui/label"
+import { remitoApi, salesApi } from "@/lib/api"
 import type { Sale } from "@/lib/types"
 import {
   Search,
@@ -51,11 +53,15 @@ export default function VentasPage() {
   const [search, setSearch] = useState("")
   const [filterInvoice, setFilterInvoice] = useState<string>("all")
   const [filterPayment, setFilterPayment] = useState<string>("all")
+  const [dateFrom, setDateFrom] = useState<string>("")
+  const [dateTo, setDateTo] = useState<string>("")
+  const [sourceFilter, setSourceFilter] = useState<'all' | 'direct' | 'order'>('direct')
   
   // Invoice modal state
   const [showInvoiceModal, setShowInvoiceModal] = useState(false)
   const [selectedSale, setSelectedSale] = useState<Sale | null>(null)
   const [emittingInvoice, setEmittingInvoice] = useState(false)
+  const [documentType, setDocumentType] = useState<'invoice' | 'remito'>('invoice')
   
   // Detail modal state
   const [showDetailModal, setShowDetailModal] = useState(false)
@@ -64,6 +70,26 @@ export default function VentasPage() {
   useEffect(() => {
     loadSales()
   }, [])
+
+  useEffect(() => {
+    const today = formatDateInput(new Date())
+    setDateFrom(today)
+    setDateTo(today)
+  }, [])
+
+  useEffect(() => {
+    if (!detailSale) return
+    const latest = sales.find((sale) => sale.id === detailSale.id)
+    if (!latest) return
+    if (
+      latest.invoicePdfUrl !== detailSale.invoicePdfUrl ||
+      latest.invoiceWhatsappUrl !== detailSale.invoiceWhatsappUrl ||
+      latest.remitoPdfUrl !== detailSale.remitoPdfUrl ||
+      latest.remitoNumber !== detailSale.remitoNumber
+    ) {
+      setDetailSale(latest)
+    }
+  }, [sales, detailSale])
 
   const loadSales = async () => {
     try {
@@ -74,6 +100,23 @@ export default function VentasPage() {
     } finally {
       setLoading(false)
     }
+  }
+
+  const formatDateInput = (date: Date) => {
+    const year = date.getFullYear()
+    const month = String(date.getMonth() + 1).padStart(2, '0')
+    const day = String(date.getDate()).padStart(2, '0')
+    return `${year}-${month}-${day}`
+  }
+
+  const isWithinDateRange = (date: Date, from?: string, to?: string) => {
+    if (!from && !to) return true
+    const value = new Date(date)
+    const start = from ? new Date(`${from}T00:00:00`) : null
+    const end = to ? new Date(`${to}T23:59:59`) : null
+    if (start && value < start) return false
+    if (end && value > end) return false
+    return true
   }
 
   const filteredSales = sales.filter((sale) => {
@@ -88,27 +131,64 @@ export default function VentasPage() {
     
     const matchesPayment =
       filterPayment === "all" || sale.paymentType === filterPayment
+    const matchesDate = isWithinDateRange(sale.createdAt, dateFrom, dateTo)
 
-    return matchesSearch && matchesInvoice && matchesPayment
+    const matchesSource =
+      sourceFilter === 'all' ||
+      (sourceFilter === 'direct' && sale.source !== 'order') ||
+      (sourceFilter === 'order' && sale.source === 'order')
+
+    return matchesSearch && matchesInvoice && matchesPayment && matchesDate && matchesSource
   })
 
-  const handleEmitInvoice = async () => {
+  const buildWhatsappUrl = (phone?: string, pdfUrl?: string, clientName?: string) => {
+    if (!phone || !pdfUrl) return null
+    const cleanPhone = phone.replace(/[^\d]/g, '')
+    if (!cleanPhone) return null
+    const message = `Hola${clientName ? ` ${clientName}` : ''}, tu comprobante esta listo: ${pdfUrl}`
+    return `https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`
+  }
+
+  const handleEmitDocument = async () => {
     if (!selectedSale) return
     setEmittingInvoice(true)
     try {
-      const result = await salesApi.emitInvoice(selectedSale.id, {
-        name: selectedSale.clientName,
-        phone: selectedSale.clientPhone,
-      })
-      setSales((prev) =>
-        prev.map((s) =>
-          s.id === selectedSale.id
-            ? { ...s, invoiceEmitted: true, invoiceNumber: result.invoiceNumber }
-            : s
+      if (documentType === 'invoice') {
+        const result = await salesApi.emitInvoice(selectedSale.id, {
+          name: selectedSale.clientName,
+          phone: selectedSale.clientPhone,
+          taxCategory: selectedSale.clientTaxCategory,
+        })
+        setSales((prev) =>
+          prev.map((s) =>
+            s.id === selectedSale.id
+              ? {
+                  ...s,
+                  invoiceEmitted: true,
+                  invoiceNumber: result.invoiceNumber,
+                  invoicePdfUrl: result.pdfUrl,
+                  invoiceWhatsappUrl: result.whatsappUrl,
+                }
+              : s
+          )
         )
-      )
+      } else {
+        const result = await remitoApi.createRemito(selectedSale.id)
+        setSales((prev) =>
+          prev.map((s) =>
+            s.id === selectedSale.id
+              ? {
+                  ...s,
+                  remitoNumber: result.remitoNumber,
+                  remitoPdfUrl: result.pdfUrl,
+                }
+              : s
+          )
+        )
+      }
       setShowInvoiceModal(false)
       setSelectedSale(null)
+      setDocumentType('invoice')
     } catch (error) {
       console.error("Error emitting invoice:", error)
     } finally {
@@ -131,6 +211,24 @@ export default function VentasPage() {
       hour: "2-digit",
       minute: "2-digit",
     }).format(new Date(date))
+  }
+
+
+  const formatTaxCategory = (category?: string) => {
+    switch (category) {
+      case 'responsable_inscripto':
+        return 'Resp. Inscripto'
+      case 'monotributo':
+        return 'Monotributo'
+      case 'consumidor_final':
+        return 'Consumidor Final'
+      case 'exento':
+        return 'Exento'
+      case 'no_responsable':
+        return 'No Responsable'
+      default:
+        return 'Venta directa'
+    }
   }
 
   const pendingInvoicesCount = sales.filter((s) => !s.invoiceEmitted).length
@@ -208,6 +306,20 @@ export default function VentasPage() {
               className="pl-10"
             />
           </div>
+          <div className="flex flex-col sm:flex-row gap-2">
+            <Input
+              type="date"
+              value={dateFrom}
+              onChange={(e) => setDateFrom(e.target.value)}
+              className="w-full sm:w-44"
+            />
+            <Input
+              type="date"
+              value={dateTo}
+              onChange={(e) => setDateTo(e.target.value)}
+              className="w-full sm:w-44"
+            />
+          </div>
           <Select value={filterInvoice} onValueChange={setFilterInvoice}>
             <SelectTrigger className="w-full sm:w-48">
               <SelectValue placeholder="Filtrar por boleta" />
@@ -229,17 +341,58 @@ export default function VentasPage() {
             </SelectContent>
           </Select>
         </div>
-        <Button asChild>
-          <Link href="/ventas/nueva">
-            <Plus className="h-4 w-4 mr-2" />
-            Nueva Venta
-          </Link>
-        </Button>
+        <div className="flex gap-2">
+          <div className="flex items-center gap-2">
+            <Button
+              variant={sourceFilter === 'direct' ? 'default' : 'outline'}
+              onClick={() => setSourceFilter('direct')}
+            >
+              Ventas Directas
+            </Button>
+            <Button
+              variant={sourceFilter === 'order' ? 'default' : 'outline'}
+              onClick={() => setSourceFilter('order')}
+            >
+              Por Pedidos
+            </Button>
+            <Button
+              variant={sourceFilter === 'all' ? 'default' : 'ghost'}
+              onClick={() => setSourceFilter('all')}
+            >
+              Todas
+            </Button>
+          </div>
+          <Button
+            variant="outline"
+            onClick={() => {
+              const today = formatDateInput(new Date())
+              setDateFrom(today)
+              setDateTo(today)
+            }}
+          >
+            Hoy
+          </Button>
+          <Button
+            variant="ghost"
+            onClick={() => {
+              setDateFrom('')
+              setDateTo('')
+            }}
+          >
+            Todas
+          </Button>
+          <Button asChild>
+            <Link href="/ventas/nueva">
+              <Plus className="h-4 w-4 mr-2" />
+              Nueva Venta
+            </Link>
+          </Button>
+        </div>
       </div>
 
       {/* Sales Table */}
       {loading ? (
-        <DataTableSkeleton columns={6} rows={8} />
+        <DataTableSkeleton columns={9} rows={8} />
       ) : filteredSales.length === 0 ? (
         <Card>
           <CardContent className="py-12 text-center">
@@ -253,9 +406,10 @@ export default function VentasPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>ID</TableHead>
+                  <TableHead>Productos</TableHead>
                   <TableHead>Fecha</TableHead>
                   <TableHead>Cliente</TableHead>
+                  <TableHead>Categoría</TableHead>
                   <TableHead>Vendedor</TableHead>
                   <TableHead>Total</TableHead>
                   <TableHead>Pago</TableHead>
@@ -266,8 +420,8 @@ export default function VentasPage() {
               <TableBody>
                 {filteredSales.map((sale) => (
                   <TableRow key={sale.id}>
-                    <TableCell className="font-mono text-sm">
-                      #{sale.id}
+                    <TableCell className="text-foreground">
+                      {sale.items.length}
                     </TableCell>
                     <TableCell className="text-muted-foreground">
                       {formatDate(sale.createdAt)}
@@ -276,6 +430,11 @@ export default function VentasPage() {
                       {sale.clientName || (
                         <span className="text-muted-foreground">Venta directa</span>
                       )}
+                    </TableCell>
+                    <TableCell>
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-primary/10 text-primary">
+                        {formatTaxCategory(sale.clientTaxCategory)}
+                      </span>
                     </TableCell>
                     <TableCell>
                       {sale.sellerName || (
@@ -328,12 +487,13 @@ export default function VentasPage() {
                         >
                           <Eye className="h-4 w-4" />
                         </Button>
-                        {!sale.invoiceEmitted && (
+                        {(!sale.invoiceEmitted || !sale.remitoNumber) && (
                           <Button
                             variant="outline"
                             size="sm"
                             onClick={() => {
                               setSelectedSale(sale)
+                              setDocumentType(sale.invoiceEmitted ? 'remito' : 'invoice')
                               setShowInvoiceModal(true)
                             }}
                           >
@@ -355,7 +515,7 @@ export default function VentasPage() {
       <Dialog open={showInvoiceModal} onOpenChange={setShowInvoiceModal}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Emitir Boleta</DialogTitle>
+            <DialogTitle>Emitir Comprobante</DialogTitle>
           </DialogHeader>
           
           {selectedSale && (
@@ -390,8 +550,26 @@ export default function VentasPage() {
                 </div>
               </div>
 
+              <div className="mt-4 space-y-3">
+                <p className="text-sm text-muted-foreground">Seleccioná qué emitir:</p>
+                <RadioGroup
+                  value={documentType}
+                  onValueChange={(value) => setDocumentType(value as 'invoice' | 'remito')}
+                  className="space-y-2"
+                >
+                  <div className="flex items-center gap-2">
+                    <RadioGroupItem value="invoice" id="emit-invoice" disabled={selectedSale?.invoiceEmitted} />
+                    <Label htmlFor="emit-invoice">Boleta</Label>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <RadioGroupItem value="remito" id="emit-remito" disabled={!!selectedSale?.remitoNumber} />
+                    <Label htmlFor="emit-remito">Remito</Label>
+                  </div>
+                </RadioGroup>
+              </div>
+
               <p className="mt-4 text-sm text-muted-foreground">
-                Se generará una boleta fiscal para esta venta. Esta acción no puede deshacerse.
+                Se generará un {documentType === 'invoice' ? 'comprobante fiscal' : 'remito'} para esta venta. Esta acción no puede deshacerse.
               </p>
             </div>
           )}
@@ -400,7 +578,14 @@ export default function VentasPage() {
             <Button variant="outline" onClick={() => setShowInvoiceModal(false)}>
               Cancelar
             </Button>
-            <Button onClick={handleEmitInvoice} disabled={emittingInvoice}>
+            <Button
+              onClick={handleEmitDocument}
+              disabled={
+                emittingInvoice ||
+                (documentType === 'invoice' && selectedSale?.invoiceEmitted) ||
+                (documentType === 'remito' && selectedSale?.remitoNumber)
+              }
+            >
               {emittingInvoice ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -409,7 +594,7 @@ export default function VentasPage() {
               ) : (
                 <>
                   <FileText className="h-4 w-4 mr-2" />
-                  Emitir Boleta
+                  {documentType === 'invoice' ? 'Emitir Boleta' : 'Emitir Remito'}
                 </>
               )}
             </Button>
@@ -427,10 +612,6 @@ export default function VentasPage() {
           {detailSale && (
             <div className="py-4">
               <div className="space-y-3 mb-4">
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">ID</span>
-                  <span className="font-mono text-foreground">#{detailSale.id}</span>
-                </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Fecha</span>
                   <span className="text-foreground">{formatDate(detailSale.createdAt)}</span>
@@ -461,6 +642,61 @@ export default function VentasPage() {
                     <span className="text-warning">Pendiente</span>
                   )}
                 </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Remito</span>
+                  {detailSale.remitoNumber ? (
+                    <span className="text-foreground">{detailSale.remitoNumber}</span>
+                  ) : (
+                    <span className="text-muted-foreground">Sin remito</span>
+                  )}
+                </div>
+                {detailSale.invoiceEmitted && (
+                  <div className="flex flex-wrap gap-2 pt-2">
+                    {detailSale.invoicePdfUrl && (
+                      <Button variant="outline" size="sm" asChild>
+                        <a href={detailSale.invoicePdfUrl} target="_blank" rel="noreferrer">
+                          Ver Boleta
+                        </a>
+                      </Button>
+                    )}
+                    {(detailSale.invoiceWhatsappUrl ||
+                      buildWhatsappUrl(detailSale.clientPhone, detailSale.invoicePdfUrl, detailSale.clientName)) && (
+                      <Button variant="outline" size="sm" asChild>
+                        <a
+                          href={
+                            detailSale.invoiceWhatsappUrl ??
+                            buildWhatsappUrl(detailSale.clientPhone, detailSale.invoicePdfUrl, detailSale.clientName) ??
+                            '#'
+                          }
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          Enviar por WhatsApp
+                        </a>
+                      </Button>
+                    )}
+                  </div>
+                )}
+                {detailSale.remitoPdfUrl && (
+                  <div className="flex flex-wrap gap-2 pt-2">
+                    <Button variant="outline" size="sm" asChild>
+                      <a href={detailSale.remitoPdfUrl} target="_blank" rel="noreferrer">
+                        Ver Remito
+                      </a>
+                    </Button>
+                    {buildWhatsappUrl(detailSale.clientPhone, detailSale.remitoPdfUrl, detailSale.clientName) && (
+                      <Button variant="outline" size="sm" asChild>
+                        <a
+                          href={buildWhatsappUrl(detailSale.clientPhone, detailSale.remitoPdfUrl, detailSale.clientName) ?? '#'}
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          Enviar por WhatsApp
+                        </a>
+                      </Button>
+                    )}
+                  </div>
+                )}
               </div>
 
               <div className="border-t border-border pt-4">

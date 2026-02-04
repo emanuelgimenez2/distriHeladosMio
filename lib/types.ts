@@ -1,4 +1,4 @@
-export type UserRole = 'admin' | 'seller'
+export type UserRole = 'admin' | 'seller' | 'customer'
 
 export interface User {
   id: string
@@ -26,10 +26,12 @@ export interface Product {
 export interface Client {
   id: string
   name: string
+  dni?: string
   cuit: string
   email: string
   phone: string
   address: string
+  taxCategory: 'responsable_inscripto' | 'monotributo' | 'consumidor_final' | 'exento' | 'no_responsable'
   creditLimit: number
   currentBalance: number
   createdAt: Date
@@ -55,17 +57,21 @@ export interface Sale {
   clientId?: string
   clientName?: string
   clientPhone?: string
+  clientTaxCategory?: Client['taxCategory']
   sellerId?: string
   sellerName?: string
+  source?: 'direct' | 'order'
   items: { productId: string; quantity: number; price: number; name: string }[]
   total: number
   paymentType: 'cash' | 'credit'
   status: 'completed' | 'pending'
   invoiceNumber?: string
+  remitoNumber?: string
   invoiceEmitted: boolean
   invoiceStatus?: InvoiceStatus
   invoicePdfUrl?: string
   invoiceWhatsappUrl?: string
+  remitoPdfUrl?: string
   createdAt: Date
 }
 
@@ -74,6 +80,8 @@ export interface Order {
   saleId?: string
   clientId?: string
   clientName?: string
+  sellerId?: string
+  sellerName?: string
   items: { productId: string; quantity: number; name: string }[]
   status: 'pending' | 'preparation' | 'delivery' | 'completed'
   address: string

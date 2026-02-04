@@ -33,17 +33,21 @@ export const getSales = async (): Promise<Sale[]> => {
         clientId: data.clientId ?? undefined,
         clientName: data.clientName ?? undefined,
         clientPhone: data.clientPhone ?? undefined,
+        clientTaxCategory: data.clientTaxCategory ?? undefined,
         sellerId: data.sellerId ?? undefined,
         sellerName: data.sellerName ?? undefined,
+        source: data.source ?? undefined,
         items: data.items ?? [],
         total: data.total,
         paymentType: data.paymentType,
         status: data.status,
         invoiceNumber: data.invoiceNumber ?? undefined,
+        remitoNumber: data.remitoNumber ?? undefined,
         invoiceEmitted: data.invoiceEmitted ?? false,
         invoiceStatus: data.invoiceStatus ?? 'pending',
         invoicePdfUrl: data.invoicePdfUrl ?? undefined,
         invoiceWhatsappUrl: data.invoiceWhatsappUrl ?? undefined,
+        remitoPdfUrl: data.remitoPdfUrl ?? undefined,
         createdAt: toDate(data.createdAt),
       }
     })
@@ -58,6 +62,8 @@ export const processSale = async (data: {
   sellerName?: string
   items: CartItem[]
   paymentType: 'cash' | 'credit'
+  source?: 'direct' | 'order'
+  createOrder?: boolean
 }): Promise<Sale> => {
   const total = data.items.reduce((acc, item) => acc + item.product.price * item.quantity, 0)
   const saleRef = doc(collection(firestore, SALES_COLLECTION))
@@ -65,12 +71,14 @@ export const processSale = async (data: {
 
   let clientAddress = 'Retiro en local'
   let resolvedClientName = data.clientName ?? 'Venta directa'
+  let resolvedTaxCategory: 'responsable_inscripto' | 'monotributo' | 'consumidor_final' | 'exento' | 'no_responsable' | undefined
   if (data.clientId) {
     const clientSnapshot = await getDoc(doc(firestore, CLIENTS_COLLECTION, data.clientId))
     if (clientSnapshot.exists()) {
       const clientData = clientSnapshot.data()
       clientAddress = clientData.address ?? clientAddress
       resolvedClientName = clientData.name ?? resolvedClientName
+      resolvedTaxCategory = clientData.taxCategory
     }
   }
 
@@ -78,8 +86,10 @@ export const processSale = async (data: {
     clientId: data.clientId ?? null,
     clientName: resolvedClientName ?? null,
     clientPhone: data.clientPhone ?? null,
+    clientTaxCategory: resolvedTaxCategory ?? null,
     sellerId: data.sellerId ?? null,
     sellerName: data.sellerName ?? null,
+    source: data.source ?? 'direct',
     items: data.items.map((item) => ({
       productId: item.product.id,
       quantity: item.quantity,
@@ -96,17 +106,22 @@ export const processSale = async (data: {
 
   batch.set(saleRef, salePayload)
 
-  const orderRef = doc(collection(firestore, ORDERS_COLLECTION))
-  batch.set(orderRef, {
-    saleId: saleRef.id,
-    clientId: data.clientId ?? null,
-    clientName: resolvedClientName ?? null,
-    items: salePayload.items,
-    status: 'pending',
-    address: clientAddress,
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
-  })
+  const shouldCreateOrder = data.createOrder ?? true
+  if (shouldCreateOrder) {
+    const orderRef = doc(collection(firestore, ORDERS_COLLECTION))
+    batch.set(orderRef, {
+      saleId: saleRef.id,
+      clientId: data.clientId ?? null,
+      clientName: resolvedClientName ?? null,
+      sellerId: data.sellerId ?? null,
+      sellerName: data.sellerName ?? null,
+      items: salePayload.items,
+      status: 'pending',
+      address: clientAddress,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    })
+  }
 
   for (const item of data.items) {
     batch.update(doc(firestore, PRODUCTS_COLLECTION, item.product.id), {
@@ -152,8 +167,10 @@ export const processSale = async (data: {
     clientId: data.clientId,
     clientName: resolvedClientName,
     clientPhone: data.clientPhone,
+    clientTaxCategory: resolvedTaxCategory,
     sellerId: data.sellerId,
     sellerName: data.sellerName,
+    source: data.source ?? 'direct',
     items: salePayload.items,
     total,
     paymentType: data.paymentType,
@@ -175,17 +192,21 @@ export const getSalesBySeller = async (sellerId: string): Promise<Sale[]> => {
       clientId: data.clientId ?? undefined,
       clientName: data.clientName ?? undefined,
       clientPhone: data.clientPhone ?? undefined,
+      clientTaxCategory: data.clientTaxCategory ?? undefined,
       sellerId: data.sellerId ?? undefined,
       sellerName: data.sellerName ?? undefined,
+      source: data.source ?? undefined,
       items: data.items ?? [],
       total: data.total,
       paymentType: data.paymentType,
       status: data.status,
       invoiceNumber: data.invoiceNumber ?? undefined,
+      remitoNumber: data.remitoNumber ?? undefined,
       invoiceEmitted: data.invoiceEmitted ?? false,
       invoiceStatus: data.invoiceStatus ?? 'pending',
       invoicePdfUrl: data.invoicePdfUrl ?? undefined,
       invoiceWhatsappUrl: data.invoiceWhatsappUrl ?? undefined,
+      remitoPdfUrl: data.remitoPdfUrl ?? undefined,
       createdAt: toDate(data.createdAt),
     }
   })

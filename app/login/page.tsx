@@ -18,7 +18,7 @@ export default function LoginPage() {
 
   useEffect(() => {
     if (!authLoading && user) {
-      router.push('/dashboard')
+      router.push(user.role === 'customer' ? '/' : '/dashboard')
     }
   }, [authLoading, user, router])
 

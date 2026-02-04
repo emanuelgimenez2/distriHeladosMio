@@ -26,10 +26,12 @@ export const getClients = async (): Promise<Client[]> => {
       return {
         id: docSnap.id,
         name: data.name,
+        dni: data.dni ?? '',
         cuit: data.cuit,
         email: data.email,
         phone: data.phone,
         address: data.address,
+        taxCategory: data.taxCategory ?? 'consumidor_final',
         creditLimit: data.creditLimit,
         currentBalance: data.currentBalance ?? 0,
         createdAt: toDate(data.createdAt),
@@ -45,10 +47,12 @@ export const getClientById = async (id: string): Promise<Client | undefined> => 
   return {
     id: snapshot.id,
     name: data.name,
+    dni: data.dni ?? '',
     cuit: data.cuit,
     email: data.email,
     phone: data.phone,
     address: data.address,
+    taxCategory: data.taxCategory ?? 'consumidor_final',
     creditLimit: data.creditLimit,
     currentBalance: data.currentBalance ?? 0,
     createdAt: toDate(data.createdAt),
@@ -61,10 +65,12 @@ export const createClient = async (
   const docRef = await addDoc(collection(firestore, CLIENTS_COLLECTION), {
     ...client,
     currentBalance: 0,
+    taxCategory: client.taxCategory ?? 'consumidor_final',
     createdAt: serverTimestamp(),
   })
   return {
     ...client,
+    taxCategory: client.taxCategory ?? 'consumidor_final',
     currentBalance: 0,
     id: docRef.id,
     createdAt: new Date(),

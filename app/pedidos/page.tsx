@@ -26,9 +26,10 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { ClientModal } from '@/components/clientes/client-modal'
-import { ordersApi, salesApi, clientsApi, paymentsApi } from '@/lib/api'
+import { ordersApi, salesApi, clientsApi, paymentsApi, remitoApi } from '@/lib/api'
 import type { Order, OrderStatus, Client } from '@/lib/types'
 import { Clock, ChefHat, Truck, CheckCircle, Package, Banknote, CreditCard, FileText, Loader2, UserPlus } from 'lucide-react'
+import { useAuth } from '@/hooks/use-auth'
 
 const statusConfig: Record<OrderStatus, { label: string; icon: React.ElementType; color: string }> = {
   pending: { label: 'Pendiente', icon: Clock, color: 'bg-warning/10 text-warning' },
@@ -40,6 +41,7 @@ const statusConfig: Record<OrderStatus, { label: string; icon: React.ElementType
 const statusFlow: OrderStatus[] = ['pending', 'preparation', 'delivery', 'completed']
 
 export default function PedidosPage() {
+  const { user } = useAuth()
   const [orders, setOrders] = useState<Order[]>([])
   const [clients, setClients] = useState<Client[]>([])
   const [loading, setLoading] = useState(true)
@@ -61,6 +63,13 @@ export default function PedidosPage() {
   const [emittingInvoice, setEmittingInvoice] = useState(false)
   const [invoiceEmitted, setInvoiceEmitted] = useState(false)
   const [invoiceNumber, setInvoiceNumber] = useState<string | null>(null)
+  const [invoicePdfUrl, setInvoicePdfUrl] = useState<string | null>(null)
+  const [invoiceWhatsappUrl, setInvoiceWhatsappUrl] = useState<string | null>(null)
+  const [remitoEmitted, setRemitoEmitted] = useState(false)
+  const [remitoNumber, setRemitoNumber] = useState<string | null>(null)
+  const [remitoPdfUrl, setRemitoPdfUrl] = useState<string | null>(null)
+  const [remitoWhatsappUrl, setRemitoWhatsappUrl] = useState<string | null>(null)
+  const [documentType, setDocumentType] = useState<'invoice' | 'remito'>('invoice')
 
   useEffect(() => {
     loadData()
@@ -155,6 +164,8 @@ export default function PedidosPage() {
           quantity: item.quantity,
         })),
         paymentType: paymentType === 'split' ? 'credit' : paymentType,
+        source: 'order',
+        createOrder: false,
       })
 
       if (paymentType === 'split' && client && normalizedCashAmount > 0) {
@@ -180,6 +191,13 @@ export default function PedidosPage() {
       setSelectedClientId('')
       setInvoiceEmitted(false)
       setInvoiceNumber(null)
+      setInvoicePdfUrl(null)
+      setInvoiceWhatsappUrl(null)
+      setRemitoEmitted(false)
+      setRemitoNumber(null)
+      setRemitoPdfUrl(null)
+      setRemitoWhatsappUrl(null)
+      setDocumentType('invoice')
     } catch (error) {
       console.error('Error completing order:', error)
     } finally {
@@ -187,17 +205,41 @@ export default function PedidosPage() {
     }
   }
 
-  const handleEmitInvoice = async () => {
+  const buildWhatsappUrl = (phone?: string, pdfUrl?: string, clientName?: string) => {
+    if (!phone || !pdfUrl) return null
+    const cleanPhone = phone.replace(/[^\d]/g, '')
+    if (!cleanPhone) return null
+    const message = `Hola${clientName ? ` ${clientName}` : ''}, tu comprobante esta listo: ${pdfUrl}`
+    return `https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`
+  }
+
+  const handleGenerateDocument = async () => {
     if (!lastSaleResult) return
     setEmittingInvoice(true)
     try {
-      const result = await salesApi.emitInvoice(lastSaleResult.saleId, {
-        name: lastSaleResult.client?.name,
-        phone: lastSaleResult.client?.phone,
-        email: lastSaleResult.client?.email,
-      })
-      setInvoiceEmitted(true)
-      setInvoiceNumber(result.invoiceNumber)
+      if (documentType === 'invoice') {
+        const result = await salesApi.emitInvoice(lastSaleResult.saleId, {
+          name: lastSaleResult.client?.name,
+          phone: lastSaleResult.client?.phone,
+          email: lastSaleResult.client?.email,
+          taxCategory: lastSaleResult.client?.taxCategory,
+        })
+        setInvoiceEmitted(true)
+        setInvoiceNumber(result.invoiceNumber)
+        setInvoicePdfUrl(result.pdfUrl)
+        setInvoiceWhatsappUrl(
+          result.whatsappUrl ??
+            buildWhatsappUrl(lastSaleResult.client?.phone, result.pdfUrl, lastSaleResult.client?.name)
+        )
+      } else {
+        const result = await remitoApi.createRemito(lastSaleResult.saleId)
+        setRemitoEmitted(true)
+        setRemitoNumber(result.remitoNumber)
+        setRemitoPdfUrl(result.pdfUrl)
+        setRemitoWhatsappUrl(
+          buildWhatsappUrl(lastSaleResult.client?.phone, result.pdfUrl, lastSaleResult.client?.name)
+        )
+      }
     } catch (error) {
       console.error('Error emitting invoice:', error)
     } finally {
@@ -215,7 +257,10 @@ export default function PedidosPage() {
   const filteredClients = clients.filter((client) => {
     const query = clientSearch.trim().toLowerCase()
     if (!query) return true
-    return client.cuit.toLowerCase().includes(query) || client.name.toLowerCase().includes(query)
+    return (
+      (client.dni?.toLowerCase().includes(query) ?? false) ||
+      client.name.toLowerCase().includes(query)
+    )
   })
 
   const handleSaveClient = async (clientData: Omit<Client, 'id' | 'createdAt' | 'currentBalance'>) => {
@@ -225,9 +270,15 @@ export default function PedidosPage() {
     setShowClientModal(false)
   }
 
-  const filteredOrders = filterStatus === 'all'
+  const filteredOrders = (filterStatus === 'all'
     ? orders
     : orders.filter(o => o.status === filterStatus)
+  ).filter((order) => {
+    if (user?.role === 'seller') {
+      return order.sellerId === user.sellerId
+    }
+    return true
+  })
 
   const formatDate = (date: Date) => {
     return new Intl.DateTimeFormat('es-AR', {
@@ -313,6 +364,9 @@ export default function PedidosPage() {
                           </h3>
                           <p className="text-sm text-muted-foreground">
                             {order.clientName || 'Venta directa'}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            Vendedor: {order.sellerName || 'Sin asignar'}
                           </p>
                         </div>
                         <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs sm:text-sm ${config.color}`}>
@@ -474,7 +528,7 @@ export default function PedidosPage() {
                 <div className="mt-4 space-y-3">
                   <Label>Cliente</Label>
                   <Input
-                    placeholder="Buscar por DNI/CUIT o nombre"
+                    placeholder="Buscar por DNI o nombre"
                     value={clientSearch}
                     onChange={(e) => setClientSearch(e.target.value)}
                   />
@@ -588,6 +642,24 @@ export default function PedidosPage() {
               </div>
             </div>
 
+            <div className="mt-4 p-4 bg-muted rounded-lg">
+              <p className="text-sm text-muted-foreground mb-3">Seleccioná qué emitir:</p>
+              <RadioGroup
+                value={documentType}
+                onValueChange={(value) => setDocumentType(value as 'invoice' | 'remito')}
+                className="space-y-2"
+              >
+                <div className="flex items-center gap-2">
+                  <RadioGroupItem value="invoice" id="order-invoice" />
+                  <Label htmlFor="order-invoice">Boleta</Label>
+                </div>
+                <div className="flex items-center gap-2">
+                  <RadioGroupItem value="remito" id="order-remito" />
+                  <Label htmlFor="order-remito">Remito</Label>
+                </div>
+              </RadioGroup>
+            </div>
+
             {invoiceEmitted && invoiceNumber && (
               <div className="mt-4 p-3 bg-success/10 rounded-lg">
                 <p className="text-sm text-success font-medium">
@@ -595,27 +667,50 @@ export default function PedidosPage() {
                 </p>
               </div>
             )}
+            {remitoEmitted && remitoNumber && (
+              <div className="mt-4 p-3 bg-success/10 rounded-lg">
+                <p className="text-sm text-success font-medium">
+                  Remito emitido: {remitoNumber}
+                </p>
+              </div>
+            )}
           </div>
 
           <DialogFooter className="flex-col sm:flex-row gap-2">
-            {!invoiceEmitted && (
-              <Button
-                variant="outline"
-                className="w-full sm:w-auto bg-transparent"
-                onClick={handleEmitInvoice}
-                disabled={emittingInvoice}
-              >
-                {emittingInvoice ? (
-                  <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Emitiendo...
-                  </>
-                ) : (
-                  <>
-                    <FileText className="h-4 w-4 mr-2" />
-                    Emitir Boleta
-                  </>
-                )}
+            <Button
+              variant="outline"
+              className="w-full sm:w-auto bg-transparent"
+              onClick={handleGenerateDocument}
+              disabled={
+                emittingInvoice ||
+                (documentType === 'invoice' && invoiceEmitted) ||
+                (documentType === 'remito' && remitoEmitted)
+              }
+            >
+              {emittingInvoice ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Emitiendo...
+                </>
+              ) : (
+                <>
+                  <FileText className="h-4 w-4 mr-2" />
+                  {documentType === 'invoice' ? 'Emitir Boleta' : 'Emitir Remito'}
+                </>
+              )}
+            </Button>
+            {invoiceWhatsappUrl && (
+              <Button className="w-full sm:w-auto" asChild>
+                <a href={invoiceWhatsappUrl} target="_blank" rel="noreferrer">
+                  Enviar Boleta por WhatsApp
+                </a>
+              </Button>
+            )}
+            {remitoWhatsappUrl && (
+              <Button className="w-full sm:w-auto" asChild>
+                <a href={remitoWhatsappUrl} target="_blank" rel="noreferrer">
+                  Enviar Remito por WhatsApp
+                </a>
               </Button>
             )}
             <Button

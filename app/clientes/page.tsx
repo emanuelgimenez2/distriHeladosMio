@@ -16,6 +16,7 @@ export default function ClientesPage() {
   const [clients, setClients] = useState<Client[]>([])
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
+  const [categoryFilter, setCategoryFilter] = useState<string>('all')
   const [modalOpen, setModalOpen] = useState(false)
   const [editingClient, setEditingClient] = useState<Client | null>(null)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
@@ -79,10 +80,14 @@ export default function ClientesPage() {
     }
   }
 
-  const filteredClients = clients.filter(client =>
-    client.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    client.cuit.toLowerCase().includes(searchQuery.toLowerCase())
-  )
+  const filteredClients = clients.filter(client => {
+    const query = searchQuery.toLowerCase()
+    const matchesSearch =
+      (client.dni?.toLowerCase().includes(query) ?? false) ||
+      client.name.toLowerCase().includes(query)
+    const matchesCategory = categoryFilter === 'all' || client.taxCategory === categoryFilter
+    return matchesSearch && matchesCategory
+  })
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('es-AR', {
@@ -92,6 +97,23 @@ export default function ClientesPage() {
     }).format(amount)
   }
 
+  const formatTaxCategory = (category: Client['taxCategory']) => {
+    switch (category) {
+      case 'responsable_inscripto':
+        return 'Responsable Inscripto'
+      case 'monotributo':
+        return 'Monotributo'
+      case 'consumidor_final':
+        return 'Consumidor Final'
+      case 'exento':
+        return 'Exento'
+      case 'no_responsable':
+        return 'No Responsable'
+      default:
+        return 'Consumidor Final'
+    }
+  }
+
   return (
     <MainLayout title="Clientes" description="Gestiona tus clientes y sus cuentas corrientes">
       {/* Header Actions */}
@@ -99,16 +121,30 @@ export default function ClientesPage() {
         <div className="relative flex-1 max-w-sm">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder="Buscar por nombre o CUIT..."
+            placeholder="Buscar por DNI o nombre..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="pl-10"
           />
         </div>
-        <Button onClick={handleCreate} className="gap-2">
-          <Plus className="h-4 w-4" />
-          Nuevo Cliente
-        </Button>
+        <div className="flex flex-col sm:flex-row gap-3">
+          <select
+            className="h-10 rounded-md border border-input bg-background px-3 text-sm text-foreground shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            value={categoryFilter}
+            onChange={(e) => setCategoryFilter(e.target.value)}
+          >
+            <option value="all">Todas las categorías</option>
+            <option value="responsable_inscripto">Responsable Inscripto</option>
+            <option value="monotributo">Monotributo</option>
+            <option value="consumidor_final">Consumidor Final</option>
+            <option value="exento">Exento</option>
+            <option value="no_responsable">No Responsable</option>
+          </select>
+          <Button onClick={handleCreate} className="gap-2">
+            <Plus className="h-4 w-4" />
+            Nuevo Cliente
+          </Button>
+        </div>
       </div>
 
       {/* Clients Table */}
@@ -122,6 +158,7 @@ export default function ClientesPage() {
                 <tr className="border-b border-border bg-muted/30">
                   <th className="text-left p-4 font-medium text-muted-foreground text-sm">Cliente</th>
                   <th className="text-left p-4 font-medium text-muted-foreground text-sm">CUIT</th>
+                  <th className="text-left p-4 font-medium text-muted-foreground text-sm">Categoría</th>
                   <th className="text-left p-4 font-medium text-muted-foreground text-sm">Contacto</th>
                   <th className="text-right p-4 font-medium text-muted-foreground text-sm">Límite Crédito</th>
                   <th className="text-right p-4 font-medium text-muted-foreground text-sm">Saldo Deuda</th>
@@ -131,7 +168,7 @@ export default function ClientesPage() {
               <tbody className="divide-y divide-border">
                 {filteredClients.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="p-8 text-center text-muted-foreground">
+                    <td colSpan={7} className="p-8 text-center text-muted-foreground">
                       No se encontraron clientes
                     </td>
                   </tr>
@@ -145,6 +182,11 @@ export default function ClientesPage() {
                         </div>
                       </td>
                       <td className="p-4 text-foreground">{client.cuit}</td>
+                      <td className="p-4">
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-primary/10 text-primary">
+                          {formatTaxCategory(client.taxCategory)}
+                        </span>
+                      </td>
                       <td className="p-4">
                         <div>
                           <p className="text-sm text-foreground">{client.email}</p>

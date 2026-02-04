@@ -16,51 +16,44 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { productsApi, clientsApi, salesApi, invoiceApi, sellersApi } from '@/lib/api'
-import type { Product, Client, CartItem, Seller } from '@/lib/types'
-import { Search, Plus, Minus, Trash2, ShoppingCart, CreditCard, Banknote, Loader2, CheckCircle, UserCheck, MessageCircle } from 'lucide-react'
-import { useAuth } from '@/hooks/use-auth'
+import { productsApi, clientsApi, salesApi, invoiceApi, remitoApi } from '@/lib/api'
+import type { Product, Client, CartItem } from '@/lib/types'
+import { Search, Plus, Minus, Trash2, ShoppingCart, CreditCard, Banknote, Loader2, CheckCircle } from 'lucide-react'
 
 export default function NuevaVentaPage() {
   const router = useRouter()
-  const { user } = useAuth()
   const [products, setProducts] = useState<Product[]>([])
   const [clients, setClients] = useState<Client[]>([])
-  const [sellers, setSellers] = useState<Seller[]>([])
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
   const [cart, setCart] = useState<CartItem[]>([])
   const [selectedClient, setSelectedClient] = useState<string>('')
-  const [selectedSeller, setSelectedSeller] = useState<string>('')
   const [paymentType, setPaymentType] = useState<'cash' | 'credit'>('cash')
   const [clientPhone, setClientPhone] = useState('')
   const [confirmDialogOpen, setConfirmDialogOpen] = useState(false)
   const [processing, setProcessing] = useState(false)
   const [saleComplete, setSaleComplete] = useState(false)
   const [invoiceNumber, setInvoiceNumber] = useState('')
-  const [invoiceWhatsappUrl, setInvoiceWhatsappUrl] = useState('')
   const [invoicePdfUrl, setInvoicePdfUrl] = useState('')
+  const [remitoNumber, setRemitoNumber] = useState('')
+  const [remitoPdfUrl, setRemitoPdfUrl] = useState('')
+  const [docDialogOpen, setDocDialogOpen] = useState(false)
+  const [docType, setDocType] = useState<'invoice' | 'remito'>('invoice')
+  const [generatingDoc, setGeneratingDoc] = useState(false)
+  const [lastSaleId, setLastSaleId] = useState<string>('')
 
   useEffect(() => {
     loadData()
   }, [])
 
-  useEffect(() => {
-    if (user?.role === 'seller' && user.sellerId) {
-      setSelectedSeller(user.sellerId)
-    }
-  }, [user])
-
   const loadData = async () => {
     try {
-      const [productsData, clientsData, sellersData] = await Promise.all([
+      const [productsData, clientsData] = await Promise.all([
         productsApi.getAll(),
         clientsApi.getAll(),
-        sellersApi.getAll(),
       ])
       setProducts(productsData)
       setClients(clientsData)
-      setSellers(sellersData.filter(s => s.isActive))
     } catch (error) {
       console.error('Error loading data:', error)
     } finally {
@@ -121,17 +114,12 @@ export default function NuevaVentaPage() {
       if (!selectedClientData) return false
       if (selectedClientData.currentBalance + cartTotal > selectedClientData.creditLimit) return false
     }
-    if (!clientPhone) return false
     return true
   }
-
-  const selectedSellerData = sellers.find(s => s.id === selectedSeller)
 
   const handleProcessSale = async () => {
     setProcessing(true)
     try {
-      const resolvedSellerId = selectedSeller && selectedSeller !== 'none' ? selectedSeller : undefined
-      const resolvedSellerName = selectedSellerData?.name
       const resolvedClientPhone = clientPhone || selectedClientData?.phone
       const resolvedClientName = paymentType === 'credit' ? selectedClientData?.name : undefined
       const resolvedClientEmail = paymentType === 'credit' ? selectedClientData?.email : undefined
@@ -140,24 +128,12 @@ export default function NuevaVentaPage() {
         clientId: paymentType === 'credit' ? selectedClient : undefined,
         clientName: resolvedClientName,
         clientPhone: resolvedClientPhone,
-        sellerId: resolvedSellerId,
-        sellerName: resolvedSellerName,
         items: cart,
         paymentType,
+        source: 'direct',
+        createOrder: false,
       })
-
-      // Generate invoice
-      const invoice = await invoiceApi.createInvoice(sale.id, {
-        name: resolvedClientName,
-        phone: resolvedClientPhone,
-        email: resolvedClientEmail,
-      })
-      setInvoiceNumber(invoice.invoiceNumber)
-      setInvoicePdfUrl(invoice.pdfUrl)
-      setInvoiceWhatsappUrl(invoice.whatsappUrl ?? '')
-      if (invoice.whatsappUrl) {
-        window.open(invoice.whatsappUrl, '_blank', 'noopener,noreferrer')
-      }
+      setLastSaleId(sale.id)
       setSaleComplete(true)
     } catch (error) {
       console.error('Error processing sale:', error)
@@ -170,18 +146,52 @@ export default function NuevaVentaPage() {
   const handleNewSale = () => {
     setCart([])
     setSelectedClient('')
-    if (user?.role === 'seller' && user.sellerId) {
-      setSelectedSeller(user.sellerId)
-    } else {
-      setSelectedSeller('')
-    }
     setPaymentType('cash')
     setClientPhone('')
     setSaleComplete(false)
     setInvoiceNumber('')
     setInvoicePdfUrl('')
-    setInvoiceWhatsappUrl('')
+    setRemitoNumber('')
+    setRemitoPdfUrl('')
+    setDocDialogOpen(false)
+    setGeneratingDoc(false)
+    setLastSaleId('')
     loadData()
+  }
+
+  const handleGenerateInvoice = async () => {
+    if (!lastSaleId) return
+    setGeneratingDoc(true)
+    try {
+      const invoice = await invoiceApi.createInvoice(lastSaleId, {
+        name: paymentType === 'credit' ? selectedClientData?.name : undefined,
+        phone: clientPhone || selectedClientData?.phone,
+        email: paymentType === 'credit' ? selectedClientData?.email : undefined,
+        taxCategory: selectedClientData?.taxCategory,
+      })
+      setInvoiceNumber(invoice.invoiceNumber)
+      setInvoicePdfUrl(invoice.pdfUrl)
+    } catch (error) {
+      console.error('Error generating invoice:', error)
+    } finally {
+      setGeneratingDoc(false)
+      setDocDialogOpen(false)
+    }
+  }
+
+  const handleGenerateRemito = async () => {
+    if (!lastSaleId) return
+    setGeneratingDoc(true)
+    try {
+      const remito = await remitoApi.createRemito(lastSaleId)
+      setRemitoNumber(remito.remitoNumber)
+      setRemitoPdfUrl(remito.pdfUrl)
+    } catch (error) {
+      console.error('Error generating remito:', error)
+    } finally {
+      setGeneratingDoc(false)
+      setDocDialogOpen(false)
+    }
   }
 
   const formatCurrency = (amount: number) => {
@@ -208,8 +218,15 @@ export default function NuevaVentaPage() {
                 La venta se ha procesado correctamente
               </p>
               <div className="p-4 rounded-lg bg-muted/50 mb-6">
-                <p className="text-sm text-muted-foreground">Factura generada</p>
-                <p className="text-lg font-semibold text-foreground">{invoiceNumber}</p>
+                <p className="text-sm text-muted-foreground">
+                  {invoiceNumber ? 'Boleta generada' : remitoNumber ? 'Remito generado' : 'Documentación pendiente'}
+                </p>
+                {invoiceNumber && (
+                  <p className="text-lg font-semibold text-foreground">{invoiceNumber}</p>
+                )}
+                {remitoNumber && (
+                  <p className="text-lg font-semibold text-foreground">{remitoNumber}</p>
+                )}
                 {invoicePdfUrl && (
                   <a
                     href={invoicePdfUrl}
@@ -217,18 +234,42 @@ export default function NuevaVentaPage() {
                     rel="noreferrer"
                     className="mt-2 inline-flex text-sm text-primary hover:underline"
                   >
-                    Ver PDF
+                    Ver Boleta
+                  </a>
+                )}
+                {remitoPdfUrl && (
+                  <a
+                    href={remitoPdfUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="mt-2 inline-flex text-sm text-primary hover:underline"
+                  >
+                    Ver Remito
                   </a>
                 )}
               </div>
               <div className="flex gap-3 justify-center">
-                {invoiceWhatsappUrl && (
-                  <Button variant="outline" asChild>
-                    <a href={invoiceWhatsappUrl} target="_blank" rel="noreferrer">
-                      <MessageCircle className="h-4 w-4 mr-2" />
-                      Enviar WhatsApp
-                    </a>
-                  </Button>
+                {!invoiceNumber && !remitoNumber && (
+                  <>
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        setDocType('invoice')
+                        setDocDialogOpen(true)
+                      }}
+                    >
+                      Generar Boleta
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        setDocType('remito')
+                        setDocDialogOpen(true)
+                      }}
+                    >
+                      Generar Remito
+                    </Button>
+                  </>
                 )}
                 <Button variant="outline" onClick={() => router.push('/pedidos')}>
                   Ver Pedidos
@@ -385,32 +426,6 @@ export default function NuevaVentaPage() {
                       </span>
                     </div>
 
-                    {/* Seller Selection */}
-                    <div className="space-y-3 mb-4">
-                      <Label className="flex items-center gap-2">
-                        <UserCheck className="h-4 w-4" />
-                        Vendedor
-                      </Label>
-                      <Select value={selectedSeller} onValueChange={setSelectedSeller} disabled={user?.role === 'seller'}>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Seleccionar vendedor (opcional)" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="none">Sin vendedor asignado</SelectItem>
-                          {sellers.map((seller) => (
-                            <SelectItem key={seller.id} value={seller.id}>
-                              {seller.name} ({seller.commissionRate}%)
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      {selectedSellerData && (
-                        <p className="text-xs text-muted-foreground">
-                          Comisión: {selectedSellerData.commissionRate}% = {formatCurrency(cartTotal * selectedSellerData.commissionRate / 100)}
-                        </p>
-                      )}
-                    </div>
-
                     {/* Payment Type */}
                     <div className="space-y-3 mb-4">
                       <Label>Tipo de Pago</Label>
@@ -478,16 +493,13 @@ export default function NuevaVentaPage() {
                     )}
 
                     <div className="space-y-3 mb-4">
-                      <Label htmlFor="whatsapp">WhatsApp del cliente</Label>
+                      <Label htmlFor="phone">Teléfono del cliente (opcional)</Label>
                       <Input
-                        id="whatsapp"
-                        placeholder="Ej: 5491122334455"
+                        id="phone"
+                        placeholder="Ej: 11 1234 5678"
                         value={clientPhone}
                         onChange={(e) => setClientPhone(e.target.value)}
                       />
-                      <p className="text-xs text-muted-foreground">
-                        Se usará para enviar el enlace del PDF una vez emitida la factura.
-                      </p>
                     </div>
 
                     <Button
@@ -518,6 +530,20 @@ export default function NuevaVentaPage() {
         confirmText={processing ? 'Procesando...' : 'Confirmar'}
         confirmDisabled={processing}
         onConfirm={handleProcessSale}
+      />
+
+      <ConfirmDialog
+        open={docDialogOpen}
+        onOpenChange={setDocDialogOpen}
+        title={docType === 'invoice' ? 'Generar boleta' : 'Generar remito'}
+        description={
+          docType === 'invoice'
+            ? '¿Desea generar la boleta para esta venta?'
+            : '¿Desea generar un remito para esta venta?'
+        }
+        confirmText={generatingDoc ? 'Generando...' : 'Generar'}
+        confirmDisabled={generatingDoc}
+        onConfirm={docType === 'invoice' ? handleGenerateInvoice : handleGenerateRemito}
       />
     </MainLayout>
   )

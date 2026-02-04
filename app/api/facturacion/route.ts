@@ -70,6 +70,7 @@ export async function POST(request: Request) {
         name: client.name ?? sale.clientName,
         phone: client.phone ?? sale.clientPhone,
         email: client.email ?? sale.clientEmail,
+        taxCategory: client.taxCategory ?? sale.clientTaxCategory,
       },
     }),
   })

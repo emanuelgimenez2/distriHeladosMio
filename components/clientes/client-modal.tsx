@@ -26,10 +26,12 @@ export function ClientModal({ open, onOpenChange, client, onSave }: ClientModalP
   const [loading, setLoading] = useState(false)
   const [formData, setFormData] = useState({
     name: '',
+    dni: '',
     cuit: '',
     email: '',
     phone: '',
     address: '',
+    taxCategory: 'consumidor_final' as const,
     creditLimit: 0,
   })
 
@@ -37,19 +39,23 @@ export function ClientModal({ open, onOpenChange, client, onSave }: ClientModalP
     if (client) {
       setFormData({
         name: client.name,
+        dni: client.dni || '',
         cuit: client.cuit,
         email: client.email,
         phone: client.phone,
         address: client.address,
+        taxCategory: client.taxCategory,
         creditLimit: client.creditLimit,
       })
     } else {
       setFormData({
         name: '',
+        dni: '',
         cuit: '',
         email: '',
         phone: '',
         address: '',
+        taxCategory: 'consumidor_final',
         creditLimit: 50000,
       })
     }
@@ -86,12 +92,23 @@ export function ClientModal({ open, onOpenChange, client, onSave }: ClientModalP
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="cuit">CUIT</Label>
+            <Label htmlFor="dni">DNI</Label>
+            <Input
+              id="dni"
+              value={formData.dni}
+              onChange={(e) => setFormData({ ...formData, dni: e.target.value })}
+              placeholder="DNI"
+              required
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="cuit">CUIL / CUIT</Label>
             <Input
               id="cuit"
               value={formData.cuit}
               onChange={(e) => setFormData({ ...formData, cuit: e.target.value })}
-              placeholder="20-12345678-9"
+              placeholder="CUIL o CUIT"
               required
             />
           </div>
@@ -129,6 +146,23 @@ export function ClientModal({ open, onOpenChange, client, onSave }: ClientModalP
               placeholder="Av. Corrientes 1234, CABA"
               required
             />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="taxCategory">Categoría Fiscal</Label>
+            <select
+              id="taxCategory"
+              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              value={formData.taxCategory}
+              onChange={(e) => setFormData({ ...formData, taxCategory: e.target.value as typeof formData.taxCategory })}
+              required
+            >
+              <option value="responsable_inscripto">Responsable Inscripto</option>
+              <option value="monotributo">Monotributo</option>
+              <option value="consumidor_final">Consumidor Final</option>
+              <option value="exento">Exento</option>
+              <option value="no_responsable">No Responsable</option>
+            </select>
           </div>
 
           <div className="space-y-2">

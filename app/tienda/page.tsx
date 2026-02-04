@@ -47,6 +47,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { useAuth } from '@/hooks/use-auth'
 
 type StoreFrontProps = {
   showHeader?: boolean
@@ -63,6 +64,7 @@ export function StoreFront({
 }: StoreFrontProps) {
   const router = useRouter()
   const isPublicStore = publicMode
+  const { user } = useAuth()
   const [products, setProducts] = useState<Product[]>([])
   const [clients, setClients] = useState<Client[]>([])
   const [cart, setCart] = useState<CartItem[]>([])
@@ -79,6 +81,9 @@ export function StoreFront({
   const [publicName, setPublicName] = useState('')
   const [publicPhone, setPublicPhone] = useState('')
   const [publicAddress, setPublicAddress] = useState('')
+  const [sellerMatchName, setSellerMatchName] = useState<string | null>(null)
+  const [publicClientFound, setPublicClientFound] = useState(false)
+  const [publicLookupLoading, setPublicLookupLoading] = useState(false)
   
   // Success modal state
   const [showSuccessModal, setShowSuccessModal] = useState(false)
@@ -91,6 +96,50 @@ export function StoreFront({
   useEffect(() => {
     loadData()
   }, [])
+
+  useEffect(() => {
+    const loadSellerMatch = async () => {
+      if (!isPublicStore || !user?.email) return
+      try {
+        const response = await fetch(`/api/public/vendedores?email=${encodeURIComponent(user.email)}`)
+        const data = await response.json()
+        setSellerMatchName(data.found ? data.sellerName : null)
+      } catch (error) {
+        console.error('Error loading seller match:', error)
+      }
+    }
+    loadSellerMatch()
+  }, [isPublicStore, user?.email])
+
+  useEffect(() => {
+    if (!isPublicStore) return
+    if (!publicDni || publicDni.trim().length < 7) {
+      setPublicClientFound(false)
+      return
+    }
+
+    const handler = setTimeout(async () => {
+      try {
+        setPublicLookupLoading(true)
+        const response = await fetch(`/api/public/clientes?dni=${encodeURIComponent(publicDni.trim())}`)
+        const data = await response.json()
+        if (data.found) {
+          setPublicName(data.client.name || '')
+          setPublicPhone(data.client.phone || '')
+          setPublicAddress(data.client.address || '')
+          setPublicClientFound(true)
+        } else {
+          setPublicClientFound(false)
+        }
+      } catch (error) {
+        console.error('Error buscando cliente:', error)
+      } finally {
+        setPublicLookupLoading(false)
+      }
+    }, 400)
+
+    return () => clearTimeout(handler)
+  }, [isPublicStore, publicDni])
 
   const loadData = async () => {
     try {
@@ -185,6 +234,7 @@ export function StoreFront({
               phone: publicPhone,
               address: publicAddress,
             },
+            sellerEmail: user?.email ?? null,
           }),
         })
         if (!response.ok) {
@@ -555,6 +605,11 @@ export function StoreFront({
           <div className="py-4">
             {isPublicStore ? (
               <div className="space-y-3">
+                {sellerMatchName && (
+                  <div className="rounded-lg border border-success/30 bg-success/10 px-3 py-2 text-sm text-success">
+                    Pedido registrado a vendedor: <span className="font-medium">{sellerMatchName}</span>
+                  </div>
+                )}
                 <div className="space-y-2">
                   <Label htmlFor="dni">DNI</Label>
                   <Input
@@ -563,6 +618,15 @@ export function StoreFront({
                     value={publicDni}
                     onChange={(e) => setPublicDni(e.target.value)}
                   />
+                  {publicLookupLoading ? (
+                    <p className="text-xs text-muted-foreground">Buscando cliente...</p>
+                  ) : publicClientFound ? (
+                    <p className="text-xs text-success">Cliente encontrado. Datos autocompletados.</p>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">
+                      Si existe, se autocompletan los datos.
+                    </p>
+                  )}
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="name">Nombre y Apellido</Label>
