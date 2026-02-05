@@ -85,10 +85,10 @@ export function AppSidebar() {
             </div>
           </div>
           {/* Botón Cerrar (Solo móvil) */}
-          <Button 
-            variant="ghost" 
-            size="icon" 
-            className="lg:hidden" 
+          <Button
+            variant="ghost"
+            size="icon"
+            className="lg:hidden"
             onClick={() => setMobileOpen(false)}
           >
             <X className="h-5 w-5" />
@@ -151,8 +151,8 @@ export function AppSidebar() {
           <button
             type="button"
             onClick={() => {
-                setMobileOpen(false);
-                signOut();
+              setMobileOpen(false);
+              signOut();
             }}
             className="flex w-full items-center gap-3 px-4 py-2 rounded-lg text-sm font-medium text-destructive hover:bg-destructive/10 transition-colors"
           >
