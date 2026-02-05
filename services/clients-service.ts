@@ -34,6 +34,7 @@ export const getClients = async (): Promise<Client[]> => {
         taxCategory: data.taxCategory ?? 'consumidor_final',
         creditLimit: data.creditLimit,
         currentBalance: data.currentBalance ?? 0,
+        notes: data.notes ?? '', // ← AGREGADO
         createdAt: toDate(data.createdAt),
       }
     })
@@ -55,6 +56,7 @@ export const getClientById = async (id: string): Promise<Client | undefined> => 
     taxCategory: data.taxCategory ?? 'consumidor_final',
     creditLimit: data.creditLimit,
     currentBalance: data.currentBalance ?? 0,
+    notes: data.notes ?? '', // ← AGREGADO
     createdAt: toDate(data.createdAt),
   }
 }
@@ -66,12 +68,14 @@ export const createClient = async (
     ...client,
     currentBalance: 0,
     taxCategory: client.taxCategory ?? 'consumidor_final',
+    notes: client.notes ?? '', // ← AGREGADO
     createdAt: serverTimestamp(),
   })
   return {
     ...client,
     taxCategory: client.taxCategory ?? 'consumidor_final',
     currentBalance: 0,
+    notes: client.notes ?? '', // ← AGREGADO
     id: docRef.id,
     createdAt: new Date(),
   }

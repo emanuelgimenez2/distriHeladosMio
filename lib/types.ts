@@ -25,27 +25,28 @@ export interface Product {
 }
 
 export interface Client {
-  id: string
-  name: string
-  dni?: string
-  cuit: string
-  email: string
-  phone: string
-  address: string
-  taxCategory: 'responsable_inscripto' | 'monotributo' | 'consumidor_final' | 'exento' | 'no_responsable'
-  creditLimit: number
-  currentBalance: number
-  createdAt: Date
+  id: string;
+  name: string;
+  dni?: string;
+  cuit: string;
+  email?: string;
+  phone?: string;
+  address?: string;
+  taxCategory: 'responsable_inscripto' | 'monotributo' | 'consumidor_final' | 'exento' | 'no_responsable';
+  creditLimit: number;
+  currentBalance: number;
+  notes?: string;
+  createdAt: number;
 }
 
 export interface Transaction {
-  id: string
-  clientId: string
-  type: 'debt' | 'payment'
-  amount: number
-  description: string
-  date: Date
-  saleId?: string
+  id: string;
+  clientId: string;
+  type: 'payment' | 'debt';
+  amount: number;
+  description: string;
+  date: number;
+  createdAt: number;
 }
 
 export interface CartItem {

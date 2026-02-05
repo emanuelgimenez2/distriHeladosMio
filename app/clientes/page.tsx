@@ -1,16 +1,48 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import Link from 'next/link'
 import { MainLayout } from '@/components/layout/main-layout'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { DataTableSkeleton } from '@/components/ui/data-table-skeleton'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { ClientModal } from '@/components/clientes/client-modal'
+import { Card, CardContent } from '@/components/ui/card'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { clientsApi } from '@/lib/api'
 import type { Client } from '@/lib/types'
-import { Plus, Search, Pencil, Trash2, Eye } from 'lucide-react'
+import { 
+  Plus, 
+  Search, 
+  Pencil, 
+  Trash2, 
+  Eye, 
+  EyeOff,
+  MoreVertical, 
+  Phone, 
+  Mail, 
+  MapPin, 
+  Users,
+  Building2,
+  CreditCard,
+  TrendingUp,
+  TrendingDown,
+  Minus,
+  StickyNote,
+  X
+} from 'lucide-react'
+import { toast } from 'sonner'
 
 export default function ClientesPage() {
   const [clients, setClients] = useState<Client[]>([])
@@ -21,6 +53,11 @@ export default function ClientesPage() {
   const [editingClient, setEditingClient] = useState<Client | null>(null)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [clientToDelete, setClientToDelete] = useState<Client | null>(null)
+  
+  // Detail modal state
+  const [detailModalOpen, setDetailModalOpen] = useState(false)
+  const [selectedClient, setSelectedClient] = useState<Client | null>(null)
+  const [showNotes, setShowNotes] = useState(false)
 
   useEffect(() => {
     loadClients()
@@ -32,6 +69,7 @@ export default function ClientesPage() {
       setClients(data)
     } catch (error) {
       console.error('Error loading clients:', error)
+      toast.error('Error al cargar los clientes')
     } finally {
       setLoading(false)
     }
@@ -52,13 +90,21 @@ export default function ClientesPage() {
     setDeleteDialogOpen(true)
   }
 
+  const handleViewDetail = (client: Client) => {
+    setSelectedClient(client)
+    setShowNotes(false)
+    setDetailModalOpen(true)
+  }
+
   const confirmDelete = async () => {
     if (!clientToDelete) return
     try {
       await clientsApi.delete(clientToDelete.id)
       setClients(clients.filter(c => c.id !== clientToDelete.id))
+      toast.success('Cliente eliminado correctamente')
     } catch (error) {
       console.error('Error deleting client:', error)
+      toast.error('Error al eliminar el cliente')
     } finally {
       setDeleteDialogOpen(false)
       setClientToDelete(null)
@@ -70,13 +116,16 @@ export default function ClientesPage() {
       if (editingClient) {
         const updated = await clientsApi.update(editingClient.id, clientData)
         setClients(clients.map(c => c.id === editingClient.id ? updated : c))
+        toast.success('Cliente actualizado correctamente')
       } else {
         const newClient = await clientsApi.create(clientData)
-        setClients([...clients, newClient])
+        setClients([newClient, ...clients])
+        toast.success('Cliente creado correctamente')
       }
       setModalOpen(false)
     } catch (error) {
       console.error('Error saving client:', error)
+      toast.error('Error al guardar el cliente')
     }
   }
 
@@ -84,159 +133,713 @@ export default function ClientesPage() {
     const query = searchQuery.toLowerCase()
     const matchesSearch =
       (client.dni?.toLowerCase().includes(query) ?? false) ||
+      (client.cuit?.toLowerCase().includes(query) ?? false) ||
       client.name.toLowerCase().includes(query)
     const matchesCategory = categoryFilter === 'all' || client.taxCategory === categoryFilter
     return matchesSearch && matchesCategory
   })
 
-  const formatCurrency = (amount: number) => {
+  const formatCurrency = (amount: number | undefined | null) => {
+    const value = amount ?? 0
+    if (isNaN(value)) return '$ 0'
     return new Intl.NumberFormat('es-AR', {
       style: 'currency',
       currency: 'ARS',
       minimumFractionDigits: 0,
-    }).format(amount)
+    }).format(value)
   }
 
   const formatTaxCategory = (category: Client['taxCategory']) => {
     switch (category) {
       case 'responsable_inscripto':
-        return 'Responsable Inscripto'
+        return 'Resp. Inscripto'
       case 'monotributo':
         return 'Monotributo'
       case 'consumidor_final':
-        return 'Consumidor Final'
+        return 'Cons. Final'
       case 'exento':
         return 'Exento'
       case 'no_responsable':
         return 'No Responsable'
       default:
-        return 'Consumidor Final'
+        return 'Cons. Final'
     }
   }
 
+  const getCategoryColor = (category: Client['taxCategory']) => {
+    switch (category) {
+      case 'responsable_inscripto':
+        return 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 border border-blue-200 dark:border-blue-800'
+      case 'monotributo':
+        return 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800'
+      case 'consumidor_final':
+        return 'bg-slate-100 text-slate-700 dark:bg-slate-800/50 dark:text-slate-300 border border-slate-200 dark:border-slate-700'
+      case 'exento':
+        return 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 border border-amber-200 dark:border-amber-800'
+      case 'no_responsable':
+        return 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400 border border-rose-200 dark:border-rose-800'
+      default:
+        return 'bg-slate-100 text-slate-700 dark:bg-slate-800/50 dark:text-slate-300 border border-slate-200 dark:border-slate-700'
+    }
+  }
+
+  const getDebtIndicator = (balance: number | undefined | null, limit: number | undefined | null) => {
+    const safeBalance = balance ?? 0
+    const safeLimit = limit ?? 0
+    if (safeBalance === 0) {
+      return { 
+        color: 'text-emerald-600 dark:text-emerald-400', 
+        bgColor: 'bg-emerald-50 dark:bg-emerald-900/20',
+        borderColor: 'border-emerald-200 dark:border-emerald-800',
+        icon: Minus,
+        label: 'Sin deuda' 
+      }
+    }
+    const ratio = safeLimit > 0 ? safeBalance / safeLimit : 1
+    if (ratio < 0.5) {
+      return { 
+        color: 'text-amber-600 dark:text-amber-400', 
+        bgColor: 'bg-amber-50 dark:bg-amber-900/20',
+        borderColor: 'border-amber-200 dark:border-amber-800',
+        icon: TrendingUp,
+        label: 'Deuda moderada' 
+      }
+    }
+    return { 
+      color: 'text-red-600 dark:text-red-400', 
+      bgColor: 'bg-red-50 dark:bg-red-900/20',
+      borderColor: 'border-red-200 dark:border-red-800',
+      icon: TrendingDown,
+      label: 'Deuda alta' 
+    }
+  }
+
+  // Stats
+  const totalClients = clients.length
+  const totalDebt = clients.reduce((sum, c) => sum + (c.currentBalance || 0), 0)
+  const clientsWithDebt = clients.filter(c => c.currentBalance > 0).length
+
   return (
     <MainLayout title="Clientes" description="Gestiona tus clientes y sus cuentas corrientes">
-      {/* Header Actions */}
-      <div className="flex flex-col sm:flex-row gap-4 justify-between mb-6">
-        <div className="relative flex-1 max-w-sm">
+      {/* Stats Cards - Solo visible en desktop */}
+      <div className="hidden lg:grid grid-cols-3 gap-4 mb-6">
+        <Card className="bg-gradient-to-br from-primary/5 to-primary/10 border-primary/20">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-primary/10">
+                <Users className="h-5 w-5 text-primary" />
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Total Clientes</p>
+                <p className="text-2xl font-bold text-foreground">{totalClients}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="bg-gradient-to-br from-amber-500/5 to-amber-500/10 border-amber-500/20">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-amber-500/10">
+                <CreditCard className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Deuda Total</p>
+                <p className="text-2xl font-bold text-foreground">{formatCurrency(totalDebt)}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="bg-gradient-to-br from-rose-500/5 to-rose-500/10 border-rose-500/20">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-rose-500/10">
+                <TrendingUp className="h-5 w-5 text-rose-600 dark:text-rose-400" />
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Con Deuda</p>
+                <p className="text-2xl font-bold text-foreground">{clientsWithDebt} <span className="text-sm font-normal text-muted-foreground">clientes</span></p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Header Actions - Desktop */}
+      <div className="hidden md:flex flex-row gap-4 justify-between mb-6">
+        <div className="relative flex-1 max-w-md">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder="Buscar por DNI o nombre..."
+            placeholder="Buscar por nombre, DNI o CUIT..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-10"
+            className="pl-10 bg-background"
           />
         </div>
-        <div className="flex flex-col sm:flex-row gap-3">
+        <div className="flex flex-row gap-3">
           <select
             className="h-10 rounded-md border border-input bg-background px-3 text-sm text-foreground shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
             value={categoryFilter}
             onChange={(e) => setCategoryFilter(e.target.value)}
           >
-            <option value="all">Todas las categorías</option>
+            <option value="all">Todas las categorias</option>
             <option value="responsable_inscripto">Responsable Inscripto</option>
             <option value="monotributo">Monotributo</option>
             <option value="consumidor_final">Consumidor Final</option>
             <option value="exento">Exento</option>
             <option value="no_responsable">No Responsable</option>
           </select>
-          <Button onClick={handleCreate} className="gap-2">
+          <Button onClick={handleCreate} className="gap-2 shadow-sm">
             <Plus className="h-4 w-4" />
             Nuevo Cliente
           </Button>
         </div>
       </div>
 
-      {/* Clients Table */}
-      {loading ? (
-        <DataTableSkeleton columns={6} rows={5} />
-      ) : (
-        <div className="rounded-lg border border-border bg-card overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-border bg-muted/30">
-                  <th className="text-left p-4 font-medium text-muted-foreground text-sm">Cliente</th>
-                  <th className="text-left p-4 font-medium text-muted-foreground text-sm">CUIT</th>
-                  <th className="text-left p-4 font-medium text-muted-foreground text-sm">Categoría</th>
-                  <th className="text-left p-4 font-medium text-muted-foreground text-sm">Contacto</th>
-                  <th className="text-right p-4 font-medium text-muted-foreground text-sm">Límite Crédito</th>
-                  <th className="text-right p-4 font-medium text-muted-foreground text-sm">Saldo Deuda</th>
-                  <th className="text-right p-4 font-medium text-muted-foreground text-sm">Acciones</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {filteredClients.length === 0 ? (
-                  <tr>
-                    <td colSpan={7} className="p-8 text-center text-muted-foreground">
-                      No se encontraron clientes
-                    </td>
-                  </tr>
-                ) : (
-                  filteredClients.map((client) => (
-                    <tr key={client.id} className="hover:bg-muted/30 transition-colors">
-                      <td className="p-4">
-                        <div>
-                          <p className="font-medium text-foreground">{client.name}</p>
-                          <p className="text-sm text-muted-foreground">{client.address}</p>
-                        </div>
-                      </td>
-                      <td className="p-4 text-foreground">{client.cuit}</td>
-                      <td className="p-4">
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-primary/10 text-primary">
-                          {formatTaxCategory(client.taxCategory)}
-                        </span>
-                      </td>
-                      <td className="p-4">
-                        <div>
-                          <p className="text-sm text-foreground">{client.email}</p>
-                          <p className="text-sm text-muted-foreground">{client.phone}</p>
-                        </div>
-                      </td>
-                      <td className="p-4 text-right font-medium text-foreground">
-                        {formatCurrency(client.creditLimit)}
-                      </td>
-                      <td className="p-4 text-right">
-                        <span className={`font-medium ${client.currentBalance > 0 ? 'text-destructive' : 'text-success'}`}>
-                          {formatCurrency(client.currentBalance)}
-                        </span>
-                      </td>
-                      <td className="p-4">
-                        <div className="flex justify-end gap-2">
-                          <Link href={`/clientes/${client.id}`}>
-                            <Button variant="ghost" size="icon">
-                              <Eye className="h-4 w-4" />
-                              <span className="sr-only">Ver cuenta</span>
-                            </Button>
-                          </Link>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleEdit(client)}
-                          >
-                            <Pencil className="h-4 w-4" />
-                            <span className="sr-only">Editar</span>
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleDelete(client)}
-                          >
-                            <Trash2 className="h-4 w-4 text-destructive" />
-                            <span className="sr-only">Eliminar</span>
-                          </Button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
+      {/* Header Actions - Mobile */}
+      <div className="flex md:hidden flex-col gap-3 mb-4">
+        <div className="relative w-full">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Buscar cliente..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-10 bg-background"
+          />
         </div>
+        <select
+          className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+          value={categoryFilter}
+          onChange={(e) => setCategoryFilter(e.target.value)}
+        >
+          <option value="all">Todas las categorias</option>
+          <option value="responsable_inscripto">Responsable Inscripto</option>
+          <option value="monotributo">Monotributo</option>
+          <option value="consumidor_final">Consumidor Final</option>
+          <option value="exento">Exento</option>
+          <option value="no_responsable">No Responsable</option>
+        </select>
+      </div>
+
+      {/* Loading State */}
+      {loading ? (
+        <>
+          <div className="hidden md:block">
+            <DataTableSkeleton columns={7} rows={5} />
+          </div>
+          <div className="md:hidden space-y-3 pb-20">
+            {[1, 2, 3, 4, 5].map((i) => (
+              <Card key={i} className="animate-pulse">
+                <CardContent className="p-4">
+                  <div className="h-5 bg-muted rounded w-2/3 mb-2" />
+                  <div className="h-4 bg-muted rounded w-1/3 mb-3" />
+                  <div className="h-4 bg-muted rounded w-1/2" />
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </>
+      ) : (
+        <>
+          {/* Empty State */}
+          {filteredClients.length === 0 ? (
+            <Card className="border-dashed border-2">
+              <CardContent className="flex flex-col items-center justify-center py-16">
+                <div className="rounded-full bg-primary/10 p-4 mb-4">
+                  <Users className="h-10 w-10 text-primary" />
+                </div>
+                <h3 className="font-semibold text-xl mb-2 text-foreground">No se encontraron clientes</h3>
+                <p className="text-muted-foreground text-sm text-center mb-6 max-w-sm">
+                  {searchQuery || categoryFilter !== 'all'
+                    ? 'Intenta ajustar los filtros de busqueda para encontrar lo que buscas'
+                    : 'Comienza agregando tu primer cliente para gestionar sus cuentas corrientes'}
+                </p>
+                {!searchQuery && categoryFilter === 'all' && (
+                  <Button onClick={handleCreate} className="gap-2" size="lg">
+                    <Plus className="h-5 w-5" />
+                    Agregar Primer Cliente
+                  </Button>
+                )}
+              </CardContent>
+            </Card>
+          ) : (
+            <>
+              {/* Desktop Table */}
+              <div className="hidden md:block rounded-xl border border-border bg-card overflow-hidden shadow-sm">
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b border-border bg-muted/50">
+                        <th className="text-left p-4 font-semibold text-muted-foreground text-xs uppercase tracking-wider">Cliente</th>
+                        <th className="text-left p-4 font-semibold text-muted-foreground text-xs uppercase tracking-wider">CUIT</th>
+                        <th className="text-left p-4 font-semibold text-muted-foreground text-xs uppercase tracking-wider">Categoria</th>
+                        <th className="text-left p-4 font-semibold text-muted-foreground text-xs uppercase tracking-wider">Contacto</th>
+                        <th className="text-right p-4 font-semibold text-muted-foreground text-xs uppercase tracking-wider">Limite</th>
+                        <th className="text-right p-4 font-semibold text-muted-foreground text-xs uppercase tracking-wider">Saldo</th>
+                        <th className="text-center p-4 font-semibold text-muted-foreground text-xs uppercase tracking-wider">Acciones</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border">
+                      {filteredClients.map((client) => {
+                        const debt = getDebtIndicator(client.currentBalance || 0, client.creditLimit || 0)
+                        const DebtIcon = debt.icon
+                        return (
+                          <tr key={client.id} className="hover:bg-muted/40 transition-colors group">
+                            <td className="p-4">
+                              <div className="flex items-center gap-3">
+                                <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                                  <span className="text-sm font-semibold text-primary">
+                                    {client.name.charAt(0).toUpperCase()}
+                                  </span>
+                                </div>
+                                <div className="min-w-0">
+                                  <div className="flex items-center gap-2">
+                                    <p className="font-medium text-foreground truncate">{client.name}</p>
+                                    {client.notes && (
+                                      <StickyNote className="h-3.5 w-3.5 text-amber-500" />
+                                    )}
+                                  </div>
+                                  {client.address && (
+                                    <p className="text-xs text-muted-foreground flex items-center gap-1 truncate">
+                                      <MapPin className="h-3 w-3 shrink-0" />
+                                      {client.address}
+                                    </p>
+                                  )}
+                                </div>
+                              </div>
+                            </td>
+                            <td className="p-4">
+                              <span className="font-mono text-sm text-foreground bg-muted px-2 py-1 rounded">
+                                {client.cuit || '-'}
+                              </span>
+                            </td>
+                            <td className="p-4">
+                              <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${getCategoryColor(client.taxCategory)}`}>
+                                {formatTaxCategory(client.taxCategory)}
+                              </span>
+                            </td>
+                            <td className="p-4">
+                              <div className="space-y-1">
+                                {client.email && (
+                                  <p className="text-sm text-foreground flex items-center gap-1.5">
+                                    <Mail className="h-3 w-3 text-muted-foreground shrink-0" />
+                                    <span className="truncate max-w-[180px]">{client.email}</span>
+                                  </p>
+                                )}
+                                {client.phone && (
+                                  <p className="text-sm text-muted-foreground flex items-center gap-1.5">
+                                    <Phone className="h-3 w-3 shrink-0" />
+                                    {client.phone}
+                                  </p>
+                                )}
+                                {!client.email && !client.phone && (
+                                  <span className="text-sm text-muted-foreground">-</span>
+                                )}
+                              </div>
+                            </td>
+                            <td className="p-4 text-right">
+                              <span className="font-medium text-foreground">
+                                {formatCurrency(client.creditLimit || 0)}
+                              </span>
+                            </td>
+                            <td className="p-4 text-right">
+                              <div className="flex flex-col items-end gap-1">
+                                <div className={`flex items-center gap-1.5 font-semibold ${debt.color}`}>
+                                  <DebtIcon className="h-4 w-4" />
+                                  {formatCurrency(client.currentBalance || 0)}
+                                </div>
+                                {(client.currentBalance || 0) > 0 && (client.creditLimit || 0) > 0 && (
+                                  <div className="w-20 h-1.5 bg-muted rounded-full overflow-hidden">
+                                    <div 
+                                      className={`h-full rounded-full transition-all ${
+                                        ((client.currentBalance || 0) / (client.creditLimit || 1)) < 0.5 
+                                          ? 'bg-amber-500' 
+                                          : 'bg-red-500'
+                                      }`}
+                                      style={{ width: `${Math.min(((client.currentBalance || 0) / (client.creditLimit || 1)) * 100, 100)}%` }}
+                                    />
+                                  </div>
+                                )}
+                              </div>
+                            </td>
+                            <td className="p-4">
+                              <div className="flex justify-center gap-1">
+                                <Button 
+                                  variant="ghost" 
+                                  size="icon" 
+                                  className="h-8 w-8 hover:bg-primary/10 hover:text-primary"
+                                  onClick={() => handleViewDetail(client)}
+                                >
+                                  <Eye className="h-4 w-4" />
+                                  <span className="sr-only">Ver detalle</span>
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8 hover:bg-blue-500/10 hover:text-blue-600"
+                                  onClick={() => handleEdit(client)}
+                                >
+                                  <Pencil className="h-4 w-4" />
+                                  <span className="sr-only">Editar</span>
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8 hover:bg-red-500/10 text-red-500 hover:text-red-600"
+                                  onClick={() => handleDelete(client)}
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                  <span className="sr-only">Eliminar</span>
+                                </Button>
+                              </div>
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Mobile Cards */}
+              <div className="md:hidden space-y-3 pb-24">
+                {filteredClients.map((client) => {
+                  const debt = getDebtIndicator(client.currentBalance || 0, client.creditLimit || 0)
+                  const DebtIcon = debt.icon
+const usagePercent = (client.creditLimit || 0) > 0
+? Math.min(((client.currentBalance || 0) / (client.creditLimit || 1)) * 100, 100)
+                    : 0
+
+                  return (
+                    <Card key={client.id} className="overflow-hidden border-border/60 shadow-sm active:scale-[0.99] transition-transform">
+                      <CardContent className="p-0">
+                        {/* Card Header */}
+                        <div className="p-4 border-b border-border/50 bg-muted/30">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="flex items-center gap-3 min-w-0 flex-1">
+                              <div className="h-11 w-11 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                                <span className="text-lg font-semibold text-primary">
+                                  {client.name.charAt(0).toUpperCase()}
+                                </span>
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-center gap-2">
+                                  <h3 className="font-semibold text-foreground truncate text-base">{client.name}</h3>
+                                  {client.notes && (
+                                    <StickyNote className="h-3.5 w-3.5 text-amber-500 shrink-0" />
+                                  )}
+                                </div>
+                                <p className="text-sm text-muted-foreground font-mono">{client.cuit || 'Sin CUIT'}</p>
+                              </div>
+                            </div>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="icon" className="h-9 w-9 shrink-0 -mr-2">
+                                  <MoreVertical className="h-5 w-5" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" className="w-48">
+                                <DropdownMenuItem onClick={() => handleViewDetail(client)} className="flex items-center gap-2">
+                                  <Eye className="h-4 w-4" />
+                                  Ver detalle
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => handleEdit(client)} className="flex items-center gap-2">
+                                  <Pencil className="h-4 w-4" />
+                                  Editar cliente
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={() => handleDelete(client)}
+                                  className="flex items-center gap-2 text-red-600 focus:text-red-600 focus:bg-red-50 dark:focus:bg-red-900/20"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                  Eliminar
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </div>
+                          <div className="mt-3">
+                            <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${getCategoryColor(client.taxCategory)}`}>
+                              <Building2 className="h-3 w-3 mr-1" />
+                              {formatTaxCategory(client.taxCategory)}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Card Body */}
+                        <div className="p-4 space-y-4">
+                          {/* Contact Info */}
+                          {(client.phone || client.email || client.address) && (
+                            <div className="flex flex-col gap-2 text-sm">
+                              {client.phone && (
+                                <a 
+                                  href={`tel:${client.phone}`} 
+                                  className="flex items-center gap-2.5 text-muted-foreground hover:text-primary transition-colors"
+                                >
+                                  <div className="h-7 w-7 rounded-full bg-muted flex items-center justify-center">
+                                    <Phone className="h-3.5 w-3.5" />
+                                  </div>
+                                  {client.phone}
+                                </a>
+                              )}
+                              {client.email && (
+                                <a 
+                                  href={`mailto:${client.email}`} 
+                                  className="flex items-center gap-2.5 text-muted-foreground hover:text-primary transition-colors"
+                                >
+                                  <div className="h-7 w-7 rounded-full bg-muted flex items-center justify-center">
+                                    <Mail className="h-3.5 w-3.5" />
+                                  </div>
+                                  <span className="truncate">{client.email}</span>
+                                </a>
+                              )}
+                              {client.address && (
+                                <div className="flex items-center gap-2.5 text-muted-foreground">
+                                  <div className="h-7 w-7 rounded-full bg-muted flex items-center justify-center">
+                                    <MapPin className="h-3.5 w-3.5" />
+                                  </div>
+                                  <span className="truncate">{client.address}</span>
+                                </div>
+                              )}
+                            </div>
+                          )}
+
+                          {/* Credit Info */}
+                          <div className={`rounded-xl p-4 ${debt.bgColor} border ${debt.borderColor}`}>
+                            <div className="flex items-center justify-between mb-3">
+                              <div>
+                                <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Saldo Deuda</p>
+                                <div className={`flex items-center gap-2 ${debt.color}`}>
+                                  <DebtIcon className="h-5 w-5" />
+                                  <p className="font-bold text-2xl">
+                                    {formatCurrency(client.currentBalance || 0)}
+                                  </p>
+                                </div>
+                              </div>
+                              <div className="text-right">
+                                <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Limite</p>
+                                <p className="font-semibold text-lg text-foreground">
+                                  {formatCurrency(client.creditLimit || 0)}
+                                </p>
+                              </div>
+                            </div>
+                            
+                            {/* Progress Bar */}
+                            {(client.creditLimit || 0) > 0 && (
+                              <div className="space-y-1.5">
+                                <div className="h-2 bg-background/50 rounded-full overflow-hidden">
+                                  <div
+                                    className={`h-full rounded-full transition-all duration-500 ${
+                                      client.currentBalance === 0
+                                        ? 'bg-emerald-500'
+                                        : usagePercent < 50
+                                        ? 'bg-amber-500'
+                                        : 'bg-red-500'
+                                    }`}
+                                    style={{ width: `${usagePercent}%` }}
+                                  />
+                                </div>
+                                <p className="text-xs text-muted-foreground text-right">
+                                  {Math.round(usagePercent)}% del limite utilizado
+                                </p>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Quick Actions */}
+                          <div className="flex gap-2 pt-1">
+                            <Button 
+                              variant="outline" 
+                              className="flex-1 h-10 bg-transparent"
+                              onClick={() => handleEdit(client)}
+                            >
+                              <Pencil className="h-4 w-4 mr-2" />
+                              Editar
+                            </Button>
+                            <Button 
+                              className="flex-1 h-10"
+                              onClick={() => handleViewDetail(client)}
+                            >
+                              <Eye className="h-4 w-4 mr-2" />
+                              Ver Detalle
+                            </Button>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )
+                })}
+              </div>
+            </>
+          )}
+        </>
       )}
 
-      {/* Client Modal */}
+      {/* FAB for Mobile */}
+      <div className="md:hidden fixed bottom-6 right-6 z-50">
+        <Button
+          onClick={handleCreate}
+          className="h-14 w-14 rounded-full shadow-lg shadow-primary/25"
+          size="icon"
+        >
+          <Plus className="h-6 w-6" />
+          <span className="sr-only">Nuevo Cliente</span>
+        </Button>
+      </div>
+
+      {/* Client Detail Modal */}
+      <Dialog open={detailModalOpen} onOpenChange={setDetailModalOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-3">
+              {selectedClient && (
+                <>
+                  <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
+                    <span className="text-lg font-semibold text-primary">
+                      {selectedClient.name.charAt(0).toUpperCase()}
+                    </span>
+                  </div>
+                  <div>
+                    <p className="font-semibold">{selectedClient.name}</p>
+                    <p className="text-sm font-normal text-muted-foreground">{selectedClient.cuit}</p>
+                  </div>
+                </>
+              )}
+            </DialogTitle>
+          </DialogHeader>
+          
+          {selectedClient && (
+            <div className="space-y-4 pt-2">
+              {/* Category Badge */}
+              <div>
+                <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${getCategoryColor(selectedClient.taxCategory)}`}>
+                  <Building2 className="h-3 w-3 mr-1" />
+                  {formatTaxCategory(selectedClient.taxCategory)}
+                </span>
+              </div>
+
+              {/* Contact Info */}
+              <div className="space-y-2">
+                {selectedClient.phone && (
+                  <a 
+                    href={`tel:${selectedClient.phone}`}
+                    className="flex items-center gap-3 text-sm p-2 rounded-lg hover:bg-muted transition-colors"
+                  >
+                    <Phone className="h-4 w-4 text-muted-foreground" />
+                    <span>{selectedClient.phone}</span>
+                  </a>
+                )}
+                {selectedClient.email && (
+                  <a 
+                    href={`mailto:${selectedClient.email}`}
+                    className="flex items-center gap-3 text-sm p-2 rounded-lg hover:bg-muted transition-colors"
+                  >
+                    <Mail className="h-4 w-4 text-muted-foreground" />
+                    <span className="truncate">{selectedClient.email}</span>
+                  </a>
+                )}
+                {selectedClient.address && (
+                  <div className="flex items-center gap-3 text-sm p-2 rounded-lg text-muted-foreground">
+                    <MapPin className="h-4 w-4 shrink-0" />
+                    <span>{selectedClient.address}</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Credit Info */}
+              {(() => {
+                const debt = getDebtIndicator(selectedClient.currentBalance || 0, selectedClient.creditLimit || 0)
+                const DebtIcon = debt.icon
+                const usagePercent = selectedClient.creditLimit > 0 
+                  ? Math.min((selectedClient.currentBalance / selectedClient.creditLimit) * 100, 100) 
+                  : 0
+                return (
+                  <div className={`rounded-xl p-4 ${debt.bgColor} border ${debt.borderColor}`}>
+                    <div className="flex items-center justify-between mb-2">
+                      <div>
+                        <p className="text-xs text-muted-foreground">Saldo Deuda</p>
+                        <div className={`flex items-center gap-1.5 ${debt.color}`}>
+                          <DebtIcon className="h-4 w-4" />
+                          <p className="font-bold text-xl">{formatCurrency(selectedClient.currentBalance || 0)}</p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-xs text-muted-foreground">Limite</p>
+                        <p className="font-semibold text-foreground">{formatCurrency(selectedClient.creditLimit || 0)}</p>
+                      </div>
+                    </div>
+                    {selectedClient.creditLimit > 0 && (
+                      <div className="h-1.5 bg-background/50 rounded-full overflow-hidden">
+                        <div
+                          className={`h-full rounded-full ${
+                            selectedClient.currentBalance === 0
+                              ? 'bg-emerald-500'
+                              : usagePercent < 50
+                              ? 'bg-amber-500'
+                              : 'bg-red-500'
+                          }`}
+                          style={{ width: `${usagePercent}%` }}
+                        />
+                      </div>
+                    )}
+                  </div>
+                )
+              })()}
+
+              {/* Private Notes */}
+              {selectedClient.notes && (
+                <div className="border border-border rounded-lg overflow-hidden">
+                  <button
+                    type="button"
+                    onClick={() => setShowNotes(!showNotes)}
+                    className="w-full flex items-center justify-between p-3 hover:bg-muted/50 transition-colors"
+                  >
+                    <div className="flex items-center gap-2 text-sm font-medium">
+                      <StickyNote className="h-4 w-4 text-amber-500" />
+                      Observaciones Privadas
+                    </div>
+                    {showNotes ? (
+                      <EyeOff className="h-4 w-4 text-muted-foreground" />
+                    ) : (
+                      <Eye className="h-4 w-4 text-muted-foreground" />
+                    )}
+                  </button>
+                  {showNotes && (
+                    <div className="px-3 pb-3">
+                      <p className="text-sm text-muted-foreground bg-amber-50 dark:bg-amber-900/20 p-2 rounded border border-amber-200 dark:border-amber-800">
+                        {selectedClient.notes}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Actions */}
+              <div className="flex gap-2 pt-2">
+                <Button 
+                  variant="outline" 
+                  className="flex-1 bg-transparent"
+                  onClick={() => {
+                    setDetailModalOpen(false)
+                    handleEdit(selectedClient)
+                  }}
+                >
+                  <Pencil className="h-4 w-4 mr-2" />
+                  Editar
+                </Button>
+                <Button
+                  variant="outline"
+                  className="bg-transparent"
+                  onClick={() => setDetailModalOpen(false)}
+                >
+                  <X className="h-4 w-4 mr-2" />
+                  Cerrar
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Client Modal (Create/Edit) */}
       <ClientModal
         open={modalOpen}
         onOpenChange={setModalOpen}
@@ -249,7 +852,7 @@ export default function ClientesPage() {
         open={deleteDialogOpen}
         onOpenChange={setDeleteDialogOpen}
         title="Eliminar Cliente"
-        description={`¿Está seguro que desea eliminar a "${clientToDelete?.name}"? Esta acción no se puede deshacer.`}
+        description={`¿Esta seguro que desea eliminar a "${clientToDelete?.name}"? Esta accion no se puede deshacer.`}
         confirmText="Eliminar"
         onConfirm={confirmDelete}
         variant="destructive"

@@ -36,15 +36,27 @@ export default function ClientDetailPage() {
   }, [params.id])
 
   const loadData = async () => {
+    const clientId = params.id as string
+    
     try {
-      const [clientData, transactionsData] = await Promise.all([
-        clientsApi.getById(params.id as string),
-        clientsApi.getTransactions(params.id as string),
-      ])
-      setClient(clientData || null)
-      setTransactions(transactionsData)
-    } catch (error) {
-      console.error('Error loading client:', error)
+      const clientData = await clientsApi.getById(clientId)
+      
+      if (!clientData) {
+        setClient(null)
+        setLoading(false)
+        return
+      }
+      
+      setClient(clientData)
+      
+      try {
+        const transactionsData = await clientsApi.getTransactions(clientId)
+        setTransactions(transactionsData)
+      } catch {
+        setTransactions([])
+      }
+    } catch {
+      setClient(null)
     } finally {
       setLoading(false)
     }
