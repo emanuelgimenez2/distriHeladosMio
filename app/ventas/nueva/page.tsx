@@ -10,24 +10,37 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from '@/components/ui/dialog'
+import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { productsApi, clientsApi, salesApi, invoiceApi, remitoApi } from '@/lib/api'
-import type { Product, Client, CartItem } from '@/lib/types'
-import { Search, Plus, Minus, Trash2, ShoppingCart, CreditCard, Banknote, Loader2, CheckCircle } from 'lucide-react'
+import { productsApi, clientsApi, salesApi, invoiceApi, remitoApi, sellersApi } from '@/lib/api'
+import type { Product, Client, CartItem, Seller } from '@/lib/types'
+import { 
+  Search, Plus, Minus, Trash2, ShoppingCart, CreditCard, Banknote, 
+  Loader2, CheckCircle, UserPlus, User, ArrowLeft, FileText, Receipt
+} from 'lucide-react'
+import { toast } from 'sonner'
 
 export default function NuevaVentaPage() {
   const router = useRouter()
   const [products, setProducts] = useState<Product[]>([])
   const [clients, setClients] = useState<Client[]>([])
+  const [sellers, setSellers] = useState<Seller[]>([])
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
   const [cart, setCart] = useState<CartItem[]>([])
   const [selectedClient, setSelectedClient] = useState<string>('')
+  const [selectedSeller, setSelectedSeller] = useState<string>('')
   const [paymentType, setPaymentType] = useState<'cash' | 'credit'>('cash')
   const [clientPhone, setClientPhone] = useState('')
   const [confirmDialogOpen, setConfirmDialogOpen] = useState(false)
@@ -41,6 +54,17 @@ export default function NuevaVentaPage() {
   const [docType, setDocType] = useState<'invoice' | 'remito'>('invoice')
   const [generatingDoc, setGeneratingDoc] = useState(false)
   const [lastSaleId, setLastSaleId] = useState<string>('')
+  
+  // New client modal state
+  const [newClientModalOpen, setNewClientModalOpen] = useState(false)
+  const [savingClient, setSavingClient] = useState(false)
+  const [newClientForm, setNewClientForm] = useState({
+    name: '',
+    cuit: '',
+    phone: '',
+    email: '',
+    creditLimit: 50000,
+  })
 
   useEffect(() => {
     loadData()
@@ -48,12 +72,14 @@ export default function NuevaVentaPage() {
 
   const loadData = async () => {
     try {
-      const [productsData, clientsData] = await Promise.all([
+      const [productsData, clientsData, sellersData] = await Promise.all([
         productsApi.getAll(),
         clientsApi.getAll(),
+        sellersApi.getAll(),
       ])
       setProducts(productsData)
       setClients(clientsData)
+      setSellers(sellersData.filter(s => s.isActive))
     } catch (error) {
       console.error('Error loading data:', error)
     } finally {
@@ -100,6 +126,7 @@ export default function NuevaVentaPage() {
   )
 
   const selectedClientData = clients.find(c => c.id === selectedClient)
+  const selectedSellerData = sellers.find(s => s.id === selectedSeller)
 
   useEffect(() => {
     if (paymentType === 'credit' && selectedClientData?.phone) {
@@ -128,6 +155,8 @@ export default function NuevaVentaPage() {
         clientId: paymentType === 'credit' ? selectedClient : undefined,
         clientName: resolvedClientName,
         clientPhone: resolvedClientPhone,
+        sellerId: selectedSeller || undefined,
+        sellerName: selectedSellerData?.name,
         items: cart,
         paymentType,
         source: 'direct',
@@ -135,8 +164,10 @@ export default function NuevaVentaPage() {
       })
       setLastSaleId(sale.id)
       setSaleComplete(true)
+      toast.success('Venta procesada correctamente')
     } catch (error) {
       console.error('Error processing sale:', error)
+      toast.error('Error al procesar la venta')
     } finally {
       setProcessing(false)
       setConfirmDialogOpen(false)
@@ -146,6 +177,7 @@ export default function NuevaVentaPage() {
   const handleNewSale = () => {
     setCart([])
     setSelectedClient('')
+    setSelectedSeller('')
     setPaymentType('cash')
     setClientPhone('')
     setSaleComplete(false)
@@ -167,12 +199,13 @@ export default function NuevaVentaPage() {
         name: paymentType === 'credit' ? selectedClientData?.name : undefined,
         phone: clientPhone || selectedClientData?.phone,
         email: paymentType === 'credit' ? selectedClientData?.email : undefined,
-        taxCategory: selectedClientData?.taxCategory,
       })
       setInvoiceNumber(invoice.invoiceNumber)
       setInvoicePdfUrl(invoice.pdfUrl)
+      toast.success('Boleta generada correctamente')
     } catch (error) {
       console.error('Error generating invoice:', error)
+      toast.error('Error al generar la boleta')
     } finally {
       setGeneratingDoc(false)
       setDocDialogOpen(false)
@@ -186,11 +219,51 @@ export default function NuevaVentaPage() {
       const remito = await remitoApi.createRemito(lastSaleId)
       setRemitoNumber(remito.remitoNumber)
       setRemitoPdfUrl(remito.pdfUrl)
+      toast.success('Remito generado correctamente')
     } catch (error) {
       console.error('Error generating remito:', error)
+      toast.error('Error al generar el remito')
     } finally {
       setGeneratingDoc(false)
       setDocDialogOpen(false)
+    }
+  }
+
+  const handleCreateNewClient = async () => {
+    if (!newClientForm.name.trim() || !newClientForm.cuit.trim()) {
+      toast.error('Nombre y CUIT son requeridos')
+      return
+    }
+    
+    setSavingClient(true)
+    try {
+      const newClient = await clientsApi.create({
+        name: newClientForm.name,
+        cuit: newClientForm.cuit,
+        phone: newClientForm.phone,
+        email: newClientForm.email,
+        creditLimit: newClientForm.creditLimit,
+        dni: '',
+        address: '',
+        taxCategory: 'consumidor_final',
+        notes: '',
+      })
+      setClients([newClient, ...clients])
+      setSelectedClient(newClient.id)
+      setNewClientModalOpen(false)
+      setNewClientForm({
+        name: '',
+        cuit: '',
+        phone: '',
+        email: '',
+        creditLimit: 50000,
+      })
+      toast.success('Cliente creado correctamente')
+    } catch (error) {
+      console.error('Error creating client:', error)
+      toast.error('Error al crear el cliente')
+    } finally {
+      setSavingClient(false)
     }
   }
 
@@ -202,85 +275,136 @@ export default function NuevaVentaPage() {
     }).format(amount)
   }
 
+  // Sale Complete Screen
   if (saleComplete) {
     return (
       <MainLayout>
-        <div className="flex items-center justify-center min-h-[60vh]">
-          <Card className="max-w-md w-full text-center">
-            <CardContent className="pt-8 pb-6">
-              <div className="flex justify-center mb-4">
-                <div className="p-4 rounded-full bg-success/10">
-                  <CheckCircle className="h-12 w-12 text-success" />
+        <div className="flex flex-col min-h-[80vh]">
+          {/* Back button */}
+          <div className="mb-4">
+            <Button variant="ghost" size="sm" onClick={() => router.push('/ventas')} className="gap-2">
+              <ArrowLeft className="h-4 w-4" />
+              Volver
+            </Button>
+          </div>
+
+          {/* Success Card */}
+          <div className="flex-1 flex items-center justify-center px-4">
+            <Card className="w-full max-w-md">
+              <CardContent className="pt-8 pb-6 px-4 sm:px-6">
+                {/* Success Icon */}
+                <div className="flex justify-center mb-6">
+                  <div className="p-4 rounded-full bg-emerald-500/10">
+                    <CheckCircle className="h-14 w-14 text-emerald-500" />
+                  </div>
                 </div>
-              </div>
-              <h2 className="text-2xl font-semibold text-foreground mb-2">Venta Completada</h2>
-              <p className="text-muted-foreground mb-4">
-                La venta se ha procesado correctamente
-              </p>
-              <div className="p-4 rounded-lg bg-muted/50 mb-6">
-                <p className="text-sm text-muted-foreground">
-                  {invoiceNumber ? 'Boleta generada' : remitoNumber ? 'Remito generado' : 'Documentación pendiente'}
+                
+                {/* Title & Description */}
+                <h2 className="text-2xl font-semibold text-foreground text-center mb-2">
+                  Venta Completada
+                </h2>
+                <p className="text-muted-foreground text-center mb-6">
+                  La venta se ha procesado correctamente
                 </p>
-                {invoiceNumber && (
-                  <p className="text-lg font-semibold text-foreground">{invoiceNumber}</p>
-                )}
-                {remitoNumber && (
-                  <p className="text-lg font-semibold text-foreground">{remitoNumber}</p>
-                )}
-                {invoicePdfUrl && (
-                  <a
-                    href={invoicePdfUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="mt-2 inline-flex text-sm text-primary hover:underline"
+                
+                {/* Document Status */}
+                <div className="rounded-lg bg-muted/50 p-4 mb-6">
+                  <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground mb-1">
+                    {invoiceNumber ? (
+                      <FileText className="h-4 w-4" />
+                    ) : remitoNumber ? (
+                      <Receipt className="h-4 w-4" />
+                    ) : (
+                      <FileText className="h-4 w-4" />
+                    )}
+                    <span>
+                      {invoiceNumber ? 'Boleta generada' : remitoNumber ? 'Remito generado' : 'Documentacion pendiente'}
+                    </span>
+                  </div>
+                  {invoiceNumber && (
+                    <p className="text-lg font-semibold text-foreground text-center">{invoiceNumber}</p>
+                  )}
+                  {remitoNumber && (
+                    <p className="text-lg font-semibold text-foreground text-center">{remitoNumber}</p>
+                  )}
+                  {(invoicePdfUrl || remitoPdfUrl) && (
+                    <div className="flex justify-center mt-2">
+                      <a
+                        href={invoicePdfUrl || remitoPdfUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-sm text-primary hover:underline"
+                      >
+                        {invoicePdfUrl ? 'Ver Boleta' : 'Ver Remito'}
+                      </a>
+                    </div>
+                  )}
+                </div>
+
+                {/* Action Buttons - Stacked for mobile */}
+                <div className="space-y-3">
+                  {!invoiceNumber && !remitoNumber && (
+                    <div className="grid grid-cols-2 gap-3">
+                      <Button
+                        variant="outline"
+                        className="w-full gap-2 bg-transparent"
+                        onClick={() => {
+                          setDocType('invoice')
+                          setDocDialogOpen(true)
+                        }}
+                      >
+                        <FileText className="h-4 w-4" />
+                        <span className="hidden sm:inline">Generar</span> Boleta
+                      </Button>
+                      <Button
+                        variant="outline"
+                        className="w-full gap-2 bg-transparent"
+                        onClick={() => {
+                          setDocType('remito')
+                          setDocDialogOpen(true)
+                        }}
+                      >
+                        <Receipt className="h-4 w-4" />
+                        <span className="hidden sm:inline">Generar</span> Remito
+                      </Button>
+                    </div>
+                  )}
+                  
+                  <Button 
+                    variant="outline" 
+                    className="w-full bg-transparent"
+                    onClick={() => router.push('/ventas')}
                   >
-                    Ver Boleta
-                  </a>
-                )}
-                {remitoPdfUrl && (
-                  <a
-                    href={remitoPdfUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="mt-2 inline-flex text-sm text-primary hover:underline"
+                    Ver Ventas
+                  </Button>
+                  
+                  <Button 
+                    className="w-full"
+                    onClick={handleNewSale}
                   >
-                    Ver Remito
-                  </a>
-                )}
-              </div>
-              <div className="flex gap-3 justify-center">
-                {!invoiceNumber && !remitoNumber && (
-                  <>
-                    <Button
-                      variant="outline"
-                      onClick={() => {
-                        setDocType('invoice')
-                        setDocDialogOpen(true)
-                      }}
-                    >
-                      Generar Boleta
-                    </Button>
-                    <Button
-                      variant="outline"
-                      onClick={() => {
-                        setDocType('remito')
-                        setDocDialogOpen(true)
-                      }}
-                    >
-                      Generar Remito
-                    </Button>
-                  </>
-                )}
-                <Button variant="outline" onClick={() => router.push('/pedidos')}>
-                  Ver Pedidos
-                </Button>
-                <Button onClick={handleNewSale}>
-                  Nueva Venta
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
+                    <Plus className="h-4 w-4 mr-2" />
+                    Nueva Venta
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
         </div>
+
+        {/* Document Generation Dialog */}
+        <ConfirmDialog
+          open={docDialogOpen}
+          onOpenChange={setDocDialogOpen}
+          title={docType === 'invoice' ? 'Generar Boleta' : 'Generar Remito'}
+          description={
+            docType === 'invoice'
+              ? 'Se generara la boleta fiscal para esta venta.'
+              : 'Se generara un remito de entrega para esta venta.'
+          }
+          confirmText={generatingDoc ? 'Generando...' : 'Generar'}
+          confirmDisabled={generatingDoc}
+          onConfirm={docType === 'invoice' ? handleGenerateInvoice : handleGenerateRemito}
+        />
       </MainLayout>
     )
   }
@@ -426,6 +550,29 @@ export default function NuevaVentaPage() {
                       </span>
                     </div>
 
+                    {/* Seller Selection */}
+                    <div className="space-y-3 mb-4">
+                      <Label>Vendedor</Label>
+                      <Select value={selectedSeller} onValueChange={setSelectedSeller}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Seleccionar vendedor (opcional)" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">Sin vendedor</SelectItem>
+                          {sellers.map((seller) => (
+                            <SelectItem key={seller.id} value={seller.id}>
+                              {seller.name} ({seller.commissionRate}%)
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      {selectedSellerData && (
+                        <p className="text-xs text-muted-foreground">
+                          Comision: {formatCurrency(cartTotal * selectedSellerData.commissionRate / 100)}
+                        </p>
+                      )}
+                    </div>
+
                     {/* Payment Type */}
                     <div className="space-y-3 mb-4">
                       <Label>Tipo de Pago</Label>
@@ -454,7 +601,19 @@ export default function NuevaVentaPage() {
                     {/* Client Selection (for credit) */}
                     {paymentType === 'credit' && (
                       <div className="space-y-3 mb-4">
-                        <Label>Cliente</Label>
+                        <div className="flex items-center justify-between">
+                          <Label>Cliente</Label>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 text-xs gap-1"
+                            onClick={() => setNewClientModalOpen(true)}
+                          >
+                            <UserPlus className="h-3.5 w-3.5" />
+                            Nuevo
+                          </Button>
+                        </div>
                         <Select value={selectedClient} onValueChange={setSelectedClient}>
                           <SelectTrigger>
                             <SelectValue placeholder="Seleccionar cliente" />
@@ -474,7 +633,7 @@ export default function NuevaVentaPage() {
                               <span className="text-foreground">{formatCurrency(selectedClientData.currentBalance)}</span>
                             </div>
                             <div className="flex justify-between">
-                              <span className="text-muted-foreground">Límite</span>
+                              <span className="text-muted-foreground">Limite</span>
                               <span className="text-foreground">{formatCurrency(selectedClientData.creditLimit)}</span>
                             </div>
                             <div className="flex justify-between border-t border-border mt-2 pt-2">
@@ -482,7 +641,7 @@ export default function NuevaVentaPage() {
                               <span className={`font-medium ${
                                 selectedClientData.creditLimit - selectedClientData.currentBalance - cartTotal < 0
                                   ? 'text-destructive'
-                                  : 'text-success'
+                                  : 'text-emerald-600'
                               }`}>
                                 {formatCurrency(selectedClientData.creditLimit - selectedClientData.currentBalance - cartTotal)}
                               </span>
@@ -493,7 +652,7 @@ export default function NuevaVentaPage() {
                     )}
 
                     <div className="space-y-3 mb-4">
-                      <Label htmlFor="phone">Teléfono del cliente (opcional)</Label>
+                      <Label htmlFor="phone">Telefono del cliente (opcional)</Label>
                       <Input
                         id="phone"
                         placeholder="Ej: 11 1234 5678"
@@ -526,25 +685,110 @@ export default function NuevaVentaPage() {
           paymentType === 'credit' && selectedClientData
             ? ` a cuenta de ${selectedClientData.name}`
             : ' en efectivo'
-        }?`}
+        }${selectedSellerData ? ` (Vendedor: ${selectedSellerData.name})` : ''}?`}
         confirmText={processing ? 'Procesando...' : 'Confirmar'}
         confirmDisabled={processing}
         onConfirm={handleProcessSale}
       />
 
-      <ConfirmDialog
-        open={docDialogOpen}
-        onOpenChange={setDocDialogOpen}
-        title={docType === 'invoice' ? 'Generar boleta' : 'Generar remito'}
-        description={
-          docType === 'invoice'
-            ? '¿Desea generar la boleta para esta venta?'
-            : '¿Desea generar un remito para esta venta?'
-        }
-        confirmText={generatingDoc ? 'Generando...' : 'Generar'}
-        confirmDisabled={generatingDoc}
-        onConfirm={docType === 'invoice' ? handleGenerateInvoice : handleGenerateRemito}
-      />
+      {/* New Client Modal */}
+      <Dialog open={newClientModalOpen} onOpenChange={setNewClientModalOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
+                <User className="h-4 w-4 text-primary" />
+              </div>
+              Nuevo Cliente Rapido
+            </DialogTitle>
+            <DialogDescription>
+              Crea un cliente con los datos minimos para continuar la venta
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4 pt-2">
+            <div className="space-y-2">
+              <Label htmlFor="newClientName">
+                Nombre <span className="text-destructive">*</span>
+              </Label>
+              <Input
+                id="newClientName"
+                value={newClientForm.name}
+                onChange={(e) => setNewClientForm({ ...newClientForm, name: e.target.value })}
+                placeholder="Nombre del cliente"
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="newClientCuit">
+                CUIT <span className="text-destructive">*</span>
+              </Label>
+              <Input
+                id="newClientCuit"
+                value={newClientForm.cuit}
+                onChange={(e) => setNewClientForm({ ...newClientForm, cuit: e.target.value })}
+                placeholder="20-12345678-9"
+              />
+            </div>
+            
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label htmlFor="newClientPhone">Telefono</Label>
+                <Input
+                  id="newClientPhone"
+                  value={newClientForm.phone}
+                  onChange={(e) => setNewClientForm({ ...newClientForm, phone: e.target.value })}
+                  placeholder="11 1234 5678"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="newClientEmail">Email</Label>
+                <Input
+                  id="newClientEmail"
+                  type="email"
+                  value={newClientForm.email}
+                  onChange={(e) => setNewClientForm({ ...newClientForm, email: e.target.value })}
+                  placeholder="email@ejemplo.com"
+                />
+              </div>
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="newClientLimit">Limite de Credito</Label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">$</span>
+                <Input
+                  id="newClientLimit"
+                  type="number"
+                  min="0"
+                  step="1000"
+                  value={newClientForm.creditLimit}
+                  onChange={(e) => setNewClientForm({ ...newClientForm, creditLimit: Number(e.target.value) || 0 })}
+                  className="pl-7"
+                />
+              </div>
+            </div>
+            
+            <div className="flex flex-col-reverse sm:flex-row justify-end gap-3 pt-4 border-t border-border">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setNewClientModalOpen(false)}
+                disabled={savingClient}
+              >
+                Cancelar
+              </Button>
+              <Button 
+                onClick={handleCreateNewClient} 
+                disabled={savingClient || !newClientForm.name.trim() || !newClientForm.cuit.trim()}
+              >
+                {savingClient && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Crear y Seleccionar
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </MainLayout>
   )
 }
