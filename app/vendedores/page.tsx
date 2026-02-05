@@ -1,15 +1,16 @@
 'use client'
 
-import React from 'react'
+import React from "react"
+
 import { useEffect, useState } from 'react'
 import { MainLayout } from '@/components/layout/main-layout'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Badge } from '@/components/ui/badge'
 import { DataTableSkeleton } from '@/components/ui/data-table-skeleton'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
+import { Card, CardContent } from '@/components/ui/card'
+import { Switch } from '@/components/ui/switch'
 import {
   Dialog,
   DialogContent,
@@ -18,53 +19,50 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog'
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
-import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { Switch } from '@/components/ui/switch'
-import { sellersApi, salesApi } from '@/lib/api'
-import type { Sale, Seller, SellerCommission } from '@/lib/types'
-import {
-  Plus,
-  Search,
-  MoreHorizontal,
-  Pencil,
-  Trash2,
+import { sellersApi } from '@/lib/api'
+import type { Seller, SellerCommission } from '@/lib/types'
+import { 
+  Plus, 
+  Search, 
+  Pencil, 
+  Trash2, 
+  Eye, 
+  MoreVertical, 
+  Phone, 
+  Mail, 
   Users,
-  DollarSign,
   TrendingUp,
+  DollarSign,
   Percent,
-  Eye,
+  X,
+  CheckCircle,
+  Clock,
   Banknote,
   Loader2,
-  CheckCircle,
 } from 'lucide-react'
+import { toast } from 'sonner'
 
 export default function VendedoresPage() {
   const [sellers, setSellers] = useState<Seller[]>([])
   const [loading, setLoading] = useState(true)
-  const [search, setSearch] = useState('')
-  const [showModal, setShowModal] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [statusFilter, setStatusFilter] = useState<string>('all')
+  const [modalOpen, setModalOpen] = useState(false)
   const [editingSeller, setEditingSeller] = useState<Seller | null>(null)
-  const [deleteId, setDeleteId] = useState<string | null>(null)
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [sellerToDelete, setSellerToDelete] = useState<Seller | null>(null)
   
-  // Detail modal
-  const [showDetailModal, setShowDetailModal] = useState(false)
+  // Detail modal state
+  const [detailModalOpen, setDetailModalOpen] = useState(false)
   const [selectedSeller, setSelectedSeller] = useState<Seller | null>(null)
   const [commissions, setCommissions] = useState<SellerCommission[]>([])
   const [loadingCommissions, setLoadingCommissions] = useState(false)
-  const [sales, setSales] = useState<Sale[]>([])
-  const [loadingSales, setLoadingSales] = useState(false)
+  const [payingCommission, setPayingCommission] = useState<string | null>(null)
   const [payingAll, setPayingAll] = useState(false)
 
   // Form state
@@ -75,6 +73,7 @@ export default function VendedoresPage() {
     commissionRate: 10,
     isActive: true,
   })
+  const [saving, setSaving] = useState(false)
 
   useEffect(() => {
     loadSellers()
@@ -86,68 +85,13 @@ export default function VendedoresPage() {
       setSellers(data)
     } catch (error) {
       console.error('Error loading sellers:', error)
+      toast.error('Error al cargar vendedores')
     } finally {
       setLoading(false)
     }
   }
 
-  const loadSellerCommissions = async (sellerId: string) => {
-    setLoadingCommissions(true)
-    try {
-      const data = await sellersApi.getCommissions(sellerId)
-      setCommissions(data.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()))
-    } catch (error) {
-      console.error('Error loading commissions:', error)
-    } finally {
-      setLoadingCommissions(false)
-    }
-  }
-
-  const loadSellerSales = async (sellerId: string) => {
-    setLoadingSales(true)
-    try {
-      const data = await salesApi.getBySeller(sellerId)
-      setSales(data.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()))
-    } catch (error) {
-      console.error('Error loading sales:', error)
-    } finally {
-      setLoadingSales(false)
-    }
-  }
-
-  const handleViewDetail = async (seller: Seller) => {
-    setSelectedSeller(seller)
-    setShowDetailModal(true)
-    await Promise.all([loadSellerCommissions(seller.id), loadSellerSales(seller.id)])
-  }
-
-  const handlePayCommission = async (commissionId: string) => {
-    try {
-      await sellersApi.payCommission(commissionId)
-      if (selectedSeller) {
-        await loadSellerCommissions(selectedSeller.id)
-        await loadSellers()
-      }
-    } catch (error) {
-      console.error('Error paying commission:', error)
-    }
-  }
-
-  const handlePayAllCommissions = async () => {
-    if (!selectedSeller) return
-    setPayingAll(true)
-    try {
-      await sellersApi.payAllCommissions(selectedSeller.id)
-      await loadSellerCommissions(selectedSeller.id)
-      await loadSellers()
-    } catch (error) {
-      console.error('Error paying all commissions:', error)
-    } finally {
-      setPayingAll(false)
-    }
-  }
-
-  const openCreateModal = () => {
+  const handleCreate = () => {
     setEditingSeller(null)
     setFormData({
       name: '',
@@ -156,10 +100,10 @@ export default function VendedoresPage() {
       commissionRate: 10,
       isActive: true,
     })
-    setShowModal(true)
+    setModalOpen(true)
   }
 
-  const openEditModal = (seller: Seller) => {
+  const handleEdit = (seller: Seller) => {
     setEditingSeller(seller)
     setFormData({
       name: seller.name,
@@ -168,274 +112,568 @@ export default function VendedoresPage() {
       commissionRate: seller.commissionRate,
       isActive: seller.isActive,
     })
-    setShowModal(true)
+    setModalOpen(true)
   }
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleDelete = (seller: Seller) => {
+    setSellerToDelete(seller)
+    setDeleteDialogOpen(true)
+  }
+
+  const handleViewDetail = async (seller: Seller) => {
+    setSelectedSeller(seller)
+    setDetailModalOpen(true)
+    setLoadingCommissions(true)
+    try {
+      const data = await sellersApi.getCommissions(seller.id)
+      setCommissions(data.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()))
+    } catch (error) {
+      console.error('Error loading commissions:', error)
+      toast.error('Error al cargar comisiones')
+    } finally {
+      setLoadingCommissions(false)
+    }
+  }
+
+  const confirmDelete = async () => {
+    if (!sellerToDelete) return
+    try {
+      await sellersApi.delete(sellerToDelete.id)
+      setSellers(sellers.filter(s => s.id !== sellerToDelete.id))
+      toast.success('Vendedor eliminado correctamente')
+    } catch (error) {
+      console.error('Error deleting seller:', error)
+      toast.error('Error al eliminar vendedor')
+    } finally {
+      setDeleteDialogOpen(false)
+      setSellerToDelete(null)
+    }
+  }
+
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault()
+    setSaving(true)
     try {
       if (editingSeller) {
         const updated = await sellersApi.update(editingSeller.id, formData)
         setSellers(sellers.map(s => s.id === editingSeller.id ? updated : s))
+        toast.success('Vendedor actualizado correctamente')
       } else {
         const newSeller = await sellersApi.create(formData)
-        setSellers([...sellers, newSeller])
+        setSellers([newSeller, ...sellers])
+        toast.success('Vendedor creado correctamente')
       }
-      setShowModal(false)
+      setModalOpen(false)
     } catch (error) {
       console.error('Error saving seller:', error)
+      toast.error('Error al guardar vendedor')
+    } finally {
+      setSaving(false)
     }
   }
 
-  const handleDelete = async () => {
-    if (!deleteId) return
+  const handlePayCommission = async (commissionId: string) => {
+    setPayingCommission(commissionId)
     try {
-      await sellersApi.delete(deleteId)
-      setSellers(sellers.filter(s => s.id !== deleteId))
-      setDeleteId(null)
+      await sellersApi.payCommission(commissionId)
+      if (selectedSeller) {
+        const updatedCommissions = await sellersApi.getCommissions(selectedSeller.id)
+        setCommissions(updatedCommissions.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()))
+        await loadSellers()
+      }
+      toast.success('Comision marcada como pagada')
     } catch (error) {
-      console.error('Error deleting seller:', error)
+      console.error('Error paying commission:', error)
+      toast.error('Error al pagar comision')
+    } finally {
+      setPayingCommission(null)
     }
   }
 
-  const handleToggleActive = async (seller: Seller) => {
+  const handlePayAllCommissions = async () => {
+    if (!selectedSeller) return
+    setPayingAll(true)
     try {
-      const updated = await sellersApi.update(seller.id, { isActive: !seller.isActive })
-      setSellers(sellers.map(s => s.id === seller.id ? updated : s))
+      await sellersApi.payAllCommissions(selectedSeller.id)
+      const updatedCommissions = await sellersApi.getCommissions(selectedSeller.id)
+      setCommissions(updatedCommissions.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()))
+      await loadSellers()
+      toast.success('Todas las comisiones fueron pagadas')
     } catch (error) {
-      console.error('Error toggling seller status:', error)
+      console.error('Error paying all commissions:', error)
+      toast.error('Error al pagar comisiones')
+    } finally {
+      setPayingAll(false)
     }
   }
 
-  const formatPrice = (price: number) => {
+  const filteredSellers = sellers.filter(seller => {
+    const query = searchQuery.toLowerCase()
+    const matchesSearch =
+      seller.name.toLowerCase().includes(query) ||
+      (seller.email?.toLowerCase().includes(query) ?? false) ||
+      (seller.phone?.toLowerCase().includes(query) ?? false)
+    const matchesStatus = 
+      statusFilter === 'all' || 
+      (statusFilter === 'active' && seller.isActive) ||
+      (statusFilter === 'inactive' && !seller.isActive)
+    return matchesSearch && matchesStatus
+  })
+
+  const formatCurrency = (amount: number | undefined | null) => {
+    const value = amount ?? 0
+    if (isNaN(value)) return '$ 0'
     return new Intl.NumberFormat('es-AR', {
       style: 'currency',
       currency: 'ARS',
-    }).format(price)
+      minimumFractionDigits: 0,
+    }).format(value)
   }
 
-  const formatDate = (date: Date) => {
-    return new Date(date).toLocaleDateString('es-AR', {
+  const formatDate = (date: Date | number) => {
+    return new Intl.DateTimeFormat('es-AR', {
       day: '2-digit',
       month: '2-digit',
       year: 'numeric',
-    })
+    }).format(new Date(date))
   }
 
-  const formatPaymentType = (type: Sale['paymentType']) => {
-    return type === 'cash' ? 'Efectivo' : 'Cuenta Corriente'
+  const getCommissionColor = (rate: number) => {
+    if (rate >= 15) return 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 border border-blue-200 dark:border-blue-800'
+    if (rate >= 10) return 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800'
+    return 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 border border-amber-200 dark:border-amber-800'
   }
 
-  const filteredSellers = sellers.filter(seller =>
-    seller.name.toLowerCase().includes(search.toLowerCase()) ||
-    seller.email.toLowerCase().includes(search.toLowerCase())
-  )
+  const getStatusBadge = (isActive: boolean) => {
+    if (isActive) {
+      return 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800'
+    }
+    return 'bg-slate-100 text-slate-700 dark:bg-slate-800/50 dark:text-slate-300 border border-slate-200 dark:border-slate-700'
+  }
 
+  // Stats
   const activeSellers = sellers.filter(s => s.isActive).length
-  const totalSales = sellers.reduce((acc, s) => acc + s.totalSales, 0)
-  const totalCommissions = sellers.reduce((acc, s) => acc + s.totalCommission, 0)
+  const totalSales = sellers.reduce((sum, s) => sum + (s.totalSales || 0), 0)
+  const totalCommissions = sellers.reduce((sum, s) => sum + (s.totalCommission || 0), 0)
   const avgCommissionRate = sellers.length > 0
-    ? sellers.reduce((acc, s) => acc + s.commissionRate, 0) / sellers.length
+    ? sellers.reduce((sum, s) => sum + s.commissionRate, 0) / sellers.length
     : 0
 
+  // Pending commissions for detail modal
   const pendingCommissions = commissions.filter(c => !c.isPaid)
-  const pendingTotal = pendingCommissions.reduce((acc, c) => acc + c.commissionAmount, 0)
+  const pendingTotal = pendingCommissions.reduce((sum, c) => sum + c.commissionAmount, 0)
 
   return (
-    <MainLayout>
-      <div className="flex flex-col gap-6">
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-          <div>
-            <h1 className="text-2xl font-bold text-foreground">Vendedores</h1>
-            <p className="text-muted-foreground">Gestiona tu equipo de ventas y comisiones</p>
-          </div>
-          <Button onClick={openCreateModal}>
-            <Plus className="h-4 w-4 mr-2" />
-            Nuevo Vendedor
-          </Button>
-        </div>
-
-        {/* KPIs */}
-        <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center gap-4">
-                <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center">
-                  <Users className="h-6 w-6 text-primary" />
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Vendedores Activos</p>
-                  <p className="text-2xl font-bold text-foreground">{activeSellers}</p>
-                </div>
+    <MainLayout title="Vendedores" description="Gestiona tu equipo de ventas y comisiones">
+      {/* Stats Cards - Solo visible en desktop */}
+      <div className="hidden lg:grid grid-cols-4 gap-4 mb-6">
+        <Card className="bg-gradient-to-br from-primary/5 to-primary/10 border-primary/20">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-primary/10">
+                <Users className="h-5 w-5 text-primary" />
               </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center gap-4">
-                <div className="h-12 w-12 rounded-lg bg-success/10 flex items-center justify-center">
-                  <TrendingUp className="h-6 w-6 text-success" />
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Ventas Totales</p>
-                  <p className="text-2xl font-bold text-foreground">{formatPrice(totalSales)}</p>
-                </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Vendedores Activos</p>
+                <p className="text-2xl font-bold text-foreground">{activeSellers}</p>
               </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center gap-4">
-                <div className="h-12 w-12 rounded-lg bg-warning/10 flex items-center justify-center">
-                  <DollarSign className="h-6 w-6 text-warning" />
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Comisiones Totales</p>
-                  <p className="text-2xl font-bold text-foreground">{formatPrice(totalCommissions)}</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center gap-4">
-                <div className="h-12 w-12 rounded-lg bg-accent/10 flex items-center justify-center">
-                  <Percent className="h-6 w-6 text-accent" />
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Comisión Promedio</p>
-                  <p className="text-2xl font-bold text-foreground">{avgCommissionRate.toFixed(1)}%</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Search */}
-        <Card>
-          <CardContent className="pt-6">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Buscar vendedor por nombre o email..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="pl-10"
-              />
             </div>
           </CardContent>
         </Card>
+        <Card className="bg-gradient-to-br from-amber-500/5 to-amber-500/10 border-amber-500/20">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-amber-500/10">
+                <TrendingUp className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Ventas Totales</p>
+                <p className="text-2xl font-bold text-foreground">{formatCurrency(totalSales)}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="bg-gradient-to-br from-rose-500/5 to-rose-500/10 border-rose-500/20">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-rose-500/10">
+                <DollarSign className="h-5 w-5 text-rose-600 dark:text-rose-400" />
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Comisiones Totales</p>
+                <p className="text-2xl font-bold text-foreground">{formatCurrency(totalCommissions)}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="bg-gradient-to-br from-emerald-500/5 to-emerald-500/10 border-emerald-500/20">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-emerald-500/10">
+                <Percent className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Comision Promedio</p>
+                <p className="text-2xl font-bold text-foreground">{avgCommissionRate.toFixed(1)}%</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
 
-        {/* Table */}
-        {loading ? (
-          <DataTableSkeleton columns={7} rows={6} />
-        ) : (
-          <Card>
-            <CardContent className="p-0">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Vendedor</TableHead>
-                    <TableHead>Contacto</TableHead>
-                    <TableHead className="text-center">Comisión</TableHead>
-                    <TableHead className="text-right">Ventas</TableHead>
-                    <TableHead className="text-right">Comisiones</TableHead>
-                    <TableHead className="text-center">Estado</TableHead>
-                    <TableHead className="w-[80px]"></TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredSellers.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
-                        No se encontraron vendedores
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    filteredSellers.map((seller) => (
-                      <TableRow key={seller.id}>
-                        <TableCell>
-                          <div className="flex items-center gap-3">
-                            <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
-                              <span className="text-sm font-semibold text-primary">
-                                {seller.name.split(' ').map(n => n[0]).join('').slice(0, 2)}
+      {/* Header Actions - Desktop */}
+      <div className="hidden md:flex flex-row gap-4 justify-between mb-6">
+        <div className="relative flex-1 max-w-md">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Buscar por nombre, email o telefono..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-10 bg-background"
+          />
+        </div>
+        <div className="flex flex-row gap-3">
+          <select
+            className="h-10 rounded-md border border-input bg-background px-3 text-sm text-foreground shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+          >
+            <option value="all">Todos los estados</option>
+            <option value="active">Activos</option>
+            <option value="inactive">Inactivos</option>
+          </select>
+          <Button onClick={handleCreate} className="gap-2 shadow-sm">
+            <Plus className="h-4 w-4" />
+            Nuevo Vendedor
+          </Button>
+        </div>
+      </div>
+
+      {/* Header Actions - Mobile */}
+      <div className="flex md:hidden flex-col gap-3 mb-4">
+        <div className="relative w-full">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Buscar vendedor..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-10 bg-background"
+          />
+        </div>
+        <select
+          className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value)}
+        >
+          <option value="all">Todos los estados</option>
+          <option value="active">Activos</option>
+          <option value="inactive">Inactivos</option>
+        </select>
+      </div>
+
+      {/* Loading State */}
+      {loading ? (
+        <>
+          <div className="hidden md:block">
+            <DataTableSkeleton columns={7} rows={5} />
+          </div>
+          <div className="md:hidden space-y-3 pb-20">
+            {[1, 2, 3, 4, 5].map((i) => (
+              <Card key={i} className="animate-pulse">
+                <CardContent className="p-4">
+                  <div className="h-5 bg-muted rounded w-2/3 mb-2" />
+                  <div className="h-4 bg-muted rounded w-1/3 mb-3" />
+                  <div className="h-4 bg-muted rounded w-1/2" />
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </>
+      ) : (
+        <>
+          {/* Empty State */}
+          {filteredSellers.length === 0 ? (
+            <Card className="border-dashed border-2">
+              <CardContent className="flex flex-col items-center justify-center py-16">
+                <div className="rounded-full bg-primary/10 p-4 mb-4">
+                  <Users className="h-10 w-10 text-primary" />
+                </div>
+                <h3 className="font-semibold text-xl mb-2 text-foreground">No se encontraron vendedores</h3>
+                <p className="text-muted-foreground text-sm text-center mb-6 max-w-sm">
+                  {searchQuery || statusFilter !== 'all'
+                    ? 'Intenta ajustar los filtros de busqueda para encontrar lo que buscas'
+                    : 'Comienza agregando tu primer vendedor para gestionar tu equipo de ventas'}
+                </p>
+                {!searchQuery && statusFilter === 'all' && (
+                  <Button onClick={handleCreate} className="gap-2" size="lg">
+                    <Plus className="h-5 w-5" />
+                    Agregar Primer Vendedor
+                  </Button>
+                )}
+              </CardContent>
+            </Card>
+          ) : (
+            <>
+              {/* Desktop Table */}
+              <div className="hidden md:block rounded-xl border border-border bg-card overflow-hidden shadow-sm">
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b border-border bg-muted/50">
+                        <th className="text-left p-4 font-semibold text-muted-foreground text-xs uppercase tracking-wider">Vendedor</th>
+                        <th className="text-left p-4 font-semibold text-muted-foreground text-xs uppercase tracking-wider">Contacto</th>
+                        <th className="text-center p-4 font-semibold text-muted-foreground text-xs uppercase tracking-wider">Comision</th>
+                        <th className="text-right p-4 font-semibold text-muted-foreground text-xs uppercase tracking-wider">Ventas</th>
+                        <th className="text-right p-4 font-semibold text-muted-foreground text-xs uppercase tracking-wider">Comisiones</th>
+                        <th className="text-center p-4 font-semibold text-muted-foreground text-xs uppercase tracking-wider">Estado</th>
+                        <th className="text-center p-4 font-semibold text-muted-foreground text-xs uppercase tracking-wider">Acciones</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border">
+                      {filteredSellers.map((seller) => (
+                        <tr key={seller.id} className="hover:bg-muted/40 transition-colors group">
+                          <td className="p-4">
+                            <div className="flex items-center gap-3">
+                              <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                                <span className="text-sm font-semibold text-primary">
+                                  {seller.name.charAt(0).toUpperCase()}
+                                </span>
+                              </div>
+                              <div className="min-w-0">
+                                <p className="font-medium text-foreground truncate">{seller.name}</p>
+                                <p className="text-xs text-muted-foreground">
+                                  Desde {formatDate(seller.createdAt)}
+                                </p>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="p-4">
+                            <div className="space-y-1">
+                              {seller.email && (
+                                <p className="text-sm text-foreground flex items-center gap-1.5">
+                                  <Mail className="h-3 w-3 text-muted-foreground shrink-0" />
+                                  <span className="truncate max-w-[180px]">{seller.email}</span>
+                                </p>
+                              )}
+                              {seller.phone && (
+                                <p className="text-sm text-muted-foreground flex items-center gap-1.5">
+                                  <Phone className="h-3 w-3 shrink-0" />
+                                  {seller.phone}
+                                </p>
+                              )}
+                              {!seller.email && !seller.phone && (
+                                <span className="text-sm text-muted-foreground">-</span>
+                              )}
+                            </div>
+                          </td>
+                          <td className="p-4 text-center">
+                            <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${getCommissionColor(seller.commissionRate)}`}>
+                              {seller.commissionRate}%
+                            </span>
+                          </td>
+                          <td className="p-4 text-right">
+                            <span className="font-medium text-foreground">
+                              {formatCurrency(seller.totalSales || 0)}
+                            </span>
+                          </td>
+                          <td className="p-4 text-right">
+                            <span className="font-medium text-emerald-600 dark:text-emerald-400">
+                              {formatCurrency(seller.totalCommission || 0)}
+                            </span>
+                          </td>
+                          <td className="p-4 text-center">
+                            <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${getStatusBadge(seller.isActive)}`}>
+                              {seller.isActive ? 'Activo' : 'Inactivo'}
+                            </span>
+                          </td>
+                          <td className="p-4">
+                            <div className="flex justify-center gap-1">
+                              <Button 
+                                variant="ghost" 
+                                size="icon" 
+                                className="h-8 w-8 hover:bg-primary/10 hover:text-primary"
+                                onClick={() => handleViewDetail(seller)}
+                              >
+                                <Eye className="h-4 w-4" />
+                                <span className="sr-only">Ver detalle</span>
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 hover:bg-blue-500/10 hover:text-blue-600"
+                                onClick={() => handleEdit(seller)}
+                              >
+                                <Pencil className="h-4 w-4" />
+                                <span className="sr-only">Editar</span>
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 hover:bg-red-500/10 text-red-500 hover:text-red-600"
+                                onClick={() => handleDelete(seller)}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                                <span className="sr-only">Eliminar</span>
+                              </Button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Mobile Cards */}
+              <div className="md:hidden space-y-3 pb-24">
+                {filteredSellers.map((seller) => (
+                  <Card key={seller.id} className="overflow-hidden border-border/60 shadow-sm active:scale-[0.99] transition-transform">
+                    <CardContent className="p-0">
+                      {/* Card Header */}
+                      <div className="p-4 border-b border-border/50 bg-muted/30">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex items-center gap-3 min-w-0 flex-1">
+                            <div className="h-11 w-11 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                              <span className="text-lg font-semibold text-primary">
+                                {seller.name.charAt(0).toUpperCase()}
                               </span>
                             </div>
-                            <div>
-                              <p className="font-medium text-foreground">{seller.name}</p>
-                              <p className="text-sm text-muted-foreground">
-                                Desde {formatDate(seller.createdAt)}
-                              </p>
+                            <div className="min-w-0 flex-1">
+                              <h3 className="font-semibold text-foreground truncate text-base">{seller.name}</h3>
+                              <p className="text-sm text-muted-foreground">Desde {formatDate(seller.createdAt)}</p>
                             </div>
                           </div>
-                        </TableCell>
-                        <TableCell>
-                          <p className="text-sm text-foreground">{seller.email}</p>
-                          <p className="text-sm text-muted-foreground">{seller.phone}</p>
-                        </TableCell>
-                        <TableCell className="text-center">
-                          <Badge variant="secondary">{seller.commissionRate}%</Badge>
-                        </TableCell>
-                        <TableCell className="text-right font-medium text-foreground">
-                          {formatPrice(seller.totalSales)}
-                        </TableCell>
-                        <TableCell className="text-right font-medium text-success">
-                          {formatPrice(seller.totalCommission)}
-                        </TableCell>
-                        <TableCell className="text-center">
-                          <Badge variant={seller.isActive ? 'default' : 'secondary'}>
-                            {seller.isActive ? 'Activo' : 'Inactivo'}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="icon">
-                                <MoreHorizontal className="h-4 w-4" />
+                              <Button variant="ghost" size="icon" className="h-9 w-9 shrink-0 -mr-2">
+                                <MoreVertical className="h-5 w-5" />
                               </Button>
                             </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuItem onClick={() => handleViewDetail(seller)}>
-                                <Eye className="h-4 w-4 mr-2" />
-                                Ver Detalle
+                            <DropdownMenuContent align="end" className="w-48">
+                              <DropdownMenuItem onClick={() => handleViewDetail(seller)} className="flex items-center gap-2">
+                                <Eye className="h-4 w-4" />
+                                Ver detalle
                               </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => openEditModal(seller)}>
-                                <Pencil className="h-4 w-4 mr-2" />
-                                Editar
+                              <DropdownMenuItem onClick={() => handleEdit(seller)} className="flex items-center gap-2">
+                                <Pencil className="h-4 w-4" />
+                                Editar vendedor
                               </DropdownMenuItem>
                               <DropdownMenuItem
-                                onClick={() => setDeleteId(seller.id)}
-                                className="text-destructive"
+                                onClick={() => handleDelete(seller)}
+                                className="flex items-center gap-2 text-red-600 focus:text-red-600 focus:bg-red-50 dark:focus:bg-red-900/20"
                               >
-                                <Trash2 className="h-4 w-4 mr-2" />
+                                <Trash2 className="h-4 w-4" />
                                 Eliminar
                               </DropdownMenuItem>
                             </DropdownMenuContent>
                           </DropdownMenu>
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
-        )}
+                        </div>
+                        <div className="flex items-center gap-2 mt-3">
+                          <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${getStatusBadge(seller.isActive)}`}>
+                            {seller.isActive ? 'Activo' : 'Inactivo'}
+                          </span>
+                          <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${getCommissionColor(seller.commissionRate)}`}>
+                            <Percent className="h-3 w-3 mr-1" />
+                            {seller.commissionRate}%
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Card Body */}
+                      <div className="p-4 space-y-4">
+                        {/* Contact Info */}
+                        {(seller.phone || seller.email) && (
+                          <div className="flex flex-col gap-2 text-sm">
+                            {seller.phone && (
+                              <a 
+                                href={`tel:${seller.phone}`} 
+                                className="flex items-center gap-2.5 text-muted-foreground hover:text-primary transition-colors"
+                              >
+                                <div className="h-7 w-7 rounded-full bg-muted flex items-center justify-center">
+                                  <Phone className="h-3.5 w-3.5" />
+                                </div>
+                                {seller.phone}
+                              </a>
+                            )}
+                            {seller.email && (
+                              <a 
+                                href={`mailto:${seller.email}`} 
+                                className="flex items-center gap-2.5 text-muted-foreground hover:text-primary transition-colors"
+                              >
+                                <div className="h-7 w-7 rounded-full bg-muted flex items-center justify-center">
+                                  <Mail className="h-3.5 w-3.5" />
+                                </div>
+                                <span className="truncate">{seller.email}</span>
+                              </a>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Stats */}
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="rounded-xl p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
+                            <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Ventas</p>
+                            <p className="font-bold text-lg text-foreground">
+                              {formatCurrency(seller.totalSales || 0)}
+                            </p>
+                          </div>
+                          <div className="rounded-xl p-3 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800">
+                            <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Comisiones</p>
+                            <p className="font-bold text-lg text-emerald-600 dark:text-emerald-400">
+                              {formatCurrency(seller.totalCommission || 0)}
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Quick Actions */}
+                        <div className="flex gap-2 pt-1">
+                          <Button 
+                            variant="outline" 
+                            className="flex-1 h-10 bg-transparent"
+                            onClick={() => handleEdit(seller)}
+                          >
+                            <Pencil className="h-4 w-4 mr-2" />
+                            Editar
+                          </Button>
+                          <Button 
+                            className="flex-1 h-10"
+                            onClick={() => handleViewDetail(seller)}
+                          >
+                            <Eye className="h-4 w-4 mr-2" />
+                            Ver Detalle
+                          </Button>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            </>
+          )}
+        </>
+      )}
+
+      {/* FAB for Mobile */}
+      <div className="md:hidden fixed bottom-6 right-6 z-50">
+        <Button
+          onClick={handleCreate}
+          className="h-14 w-14 rounded-full shadow-lg shadow-primary/25"
+          size="icon"
+        >
+          <Plus className="h-6 w-6" />
+          <span className="sr-only">Nuevo Vendedor</span>
+        </Button>
       </div>
 
       {/* Create/Edit Modal */}
-      <Dialog open={showModal} onOpenChange={setShowModal}>
+      <Dialog open={modalOpen} onOpenChange={setModalOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>
               {editingSeller ? 'Editar Vendedor' : 'Nuevo Vendedor'}
             </DialogTitle>
           </DialogHeader>
-          <form onSubmit={handleSubmit}>
+          <form onSubmit={handleSave}>
             <div className="grid gap-4 py-4">
               <div className="grid gap-2">
                 <Label htmlFor="name">Nombre Completo</Label>
@@ -443,6 +681,7 @@ export default function VendedoresPage() {
                   id="name"
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  placeholder="Ej: Juan Perez"
                   required
                 />
               </div>
@@ -453,20 +692,22 @@ export default function VendedoresPage() {
                   type="email"
                   value={formData.email}
                   onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                  placeholder="Ej: juan@email.com"
                   required
                 />
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="phone">Teléfono</Label>
+                <Label htmlFor="phone">Telefono</Label>
                 <Input
                   id="phone"
                   value={formData.phone}
                   onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                  placeholder="Ej: 11 1234-5678"
                   required
                 />
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="commissionRate">Porcentaje de Comisión (%)</Label>
+                <Label htmlFor="commissionRate">Porcentaje de Comision (%)</Label>
                 <Input
                   id="commissionRate"
                   type="number"
@@ -488,10 +729,11 @@ export default function VendedoresPage() {
               </div>
             </div>
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setShowModal(false)}>
+              <Button type="button" variant="outline" onClick={() => setModalOpen(false)}>
                 Cancelar
               </Button>
-              <Button type="submit">
+              <Button type="submit" disabled={saving}>
+                {saving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
                 {editingSeller ? 'Guardar Cambios' : 'Crear Vendedor'}
               </Button>
             </DialogFooter>
@@ -499,226 +741,206 @@ export default function VendedoresPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Detail Modal */}
-      <Dialog open={showDetailModal} onOpenChange={setShowDetailModal}>
-        <DialogContent className="sm:max-w-2xl max-h-[85vh] overflow-y-auto">
+      {/* Detail Modal with Commissions */}
+      <Dialog open={detailModalOpen} onOpenChange={setDetailModalOpen}>
+        <DialogContent className="sm:max-w-3xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Detalle del Vendedor</DialogTitle>
+            <DialogTitle className="flex items-center gap-3">
+              {selectedSeller && (
+                <>
+                  <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
+                    <span className="text-lg font-semibold text-primary">
+                      {selectedSeller.name.charAt(0).toUpperCase()}
+                    </span>
+                  </div>
+                  <div>
+                    <p className="font-semibold">{selectedSeller.name}</p>
+                    <p className="text-sm font-normal text-muted-foreground">{selectedSeller.email}</p>
+                  </div>
+                </>
+              )}
+            </DialogTitle>
           </DialogHeader>
           
           {selectedSeller && (
-            <div className="py-4">
-              {/* Seller Info */}
-              <div className="flex items-center gap-4 mb-6">
-                <div className="h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center">
-                  <span className="text-xl font-semibold text-primary">
-                    {selectedSeller.name.split(' ').map(n => n[0]).join('').slice(0, 2)}
-                  </span>
-                </div>
-                <div>
-                  <h3 className="text-lg font-semibold text-foreground">{selectedSeller.name}</h3>
-                  <p className="text-sm text-muted-foreground">{selectedSeller.email}</p>
-                  <div className="flex items-center gap-2 mt-1">
-                    <Badge variant={selectedSeller.isActive ? 'default' : 'secondary'}>
-                      {selectedSeller.isActive ? 'Activo' : 'Inactivo'}
-                    </Badge>
-                    <Badge variant="outline">{selectedSeller.commissionRate}% comisión</Badge>
-                  </div>
-                </div>
+            <div className="space-y-6 pt-2">
+              {/* Seller Info Badges */}
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${getStatusBadge(selectedSeller.isActive)}`}>
+                  {selectedSeller.isActive ? 'Activo' : 'Inactivo'}
+                </span>
+                <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${getCommissionColor(selectedSeller.commissionRate)}`}>
+                  <Percent className="h-3 w-3 mr-1" />
+                  {selectedSeller.commissionRate}% comision
+                </span>
+                {selectedSeller.phone && (
+                  <a 
+                    href={`tel:${selectedSeller.phone}`}
+                    className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-muted hover:bg-muted/80 transition-colors"
+                  >
+                    <Phone className="h-3 w-3 mr-1" />
+                    {selectedSeller.phone}
+                  </a>
+                )}
               </div>
 
               {/* Stats */}
-              <div className="grid grid-cols-2 gap-4 mb-6">
-                <Card>
-                  <CardContent className="pt-4">
-                    <p className="text-sm text-muted-foreground">Ventas Totales</p>
-                    <p className="text-xl font-bold text-foreground">{formatPrice(selectedSeller.totalSales)}</p>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardContent className="pt-4">
-                    <p className="text-sm text-muted-foreground">Comisiones Ganadas</p>
-                    <p className="text-xl font-bold text-success">{formatPrice(selectedSeller.totalCommission)}</p>
-                  </CardContent>
-                </Card>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                <div className="rounded-xl p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
+                  <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide mb-1">Ventas Totales</p>
+                  <p className="font-bold text-xl text-foreground">
+                    {formatCurrency(selectedSeller.totalSales || 0)}
+                  </p>
+                </div>
+                <div className="rounded-xl p-4 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800">
+                  <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide mb-1">Comisiones Totales</p>
+                  <p className="font-bold text-xl text-emerald-600 dark:text-emerald-400">
+                    {formatCurrency(selectedSeller.totalCommission || 0)}
+                  </p>
+                </div>
+                <div className="rounded-xl p-4 bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-800 col-span-2 sm:col-span-1">
+                  <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide mb-1">Pendientes de Pago</p>
+                  <p className="font-bold text-xl text-rose-600 dark:text-rose-400">
+                    {formatCurrency(pendingTotal)}
+                  </p>
+                  <p className="text-xs text-muted-foreground">{pendingCommissions.length} comisiones</p>
+                </div>
               </div>
 
-              {/* Pending Commissions Summary */}
-              {pendingCommissions.length > 0 && (
-                <Card className="mb-4 border-warning">
-                  <CardContent className="pt-4">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-sm text-muted-foreground">Comisiones Pendientes de Pago</p>
-                        <p className="text-xl font-bold text-warning">{formatPrice(pendingTotal)}</p>
-                        <p className="text-sm text-muted-foreground">{pendingCommissions.length} comisiones</p>
-                      </div>
-                      <Button onClick={handlePayAllCommissions} disabled={payingAll}>
-                        {payingAll ? (
-                          <>
-                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                            Pagando...
-                          </>
-                        ) : (
-                          <>
-                            <Banknote className="h-4 w-4 mr-2" />
-                            Pagar Todas
-                          </>
-                        )}
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
-
               {/* Commissions List */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-base">Historial de Comisiones</CardTitle>
-                </CardHeader>
-                <CardContent className="p-0">
-                  {loadingCommissions ? (
-                    <div className="p-8 text-center">
-                      <Loader2 className="h-6 w-6 animate-spin mx-auto text-muted-foreground" />
-                    </div>
-                  ) : commissions.length === 0 ? (
-                    <p className="p-8 text-center text-muted-foreground">
-                      No hay comisiones registradas
-                    </p>
-                  ) : (
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Fecha</TableHead>
-                          <TableHead className="text-right">Venta</TableHead>
-                          <TableHead className="text-center">Tasa</TableHead>
-                          <TableHead className="text-right">Comisión</TableHead>
-                          <TableHead className="text-center">Estado</TableHead>
-                          <TableHead></TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {commissions.map((commission) => (
-                          <TableRow key={commission.id}>
-                            <TableCell className="text-foreground">
-                              {formatDate(commission.createdAt)}
-                            </TableCell>
-                            <TableCell className="text-right text-foreground">
-                              {formatPrice(commission.saleTotal)}
-                            </TableCell>
-                            <TableCell className="text-center">
-                              <Badge variant="outline">{commission.commissionRate}%</Badge>
-                            </TableCell>
-                            <TableCell className="text-right font-medium text-success">
-                              {formatPrice(commission.commissionAmount)}
-                            </TableCell>
-                            <TableCell className="text-center">
-                              {commission.isPaid ? (
-                                <Badge variant="default" className="bg-success text-success-foreground">
-                                  <CheckCircle className="h-3 w-3 mr-1" />
-                                  Pagada
-                                </Badge>
-                              ) : (
-                                <Badge variant="secondary">Pendiente</Badge>
-                              )}
-                            </TableCell>
-                            <TableCell>
-                              {!commission.isPaid && (
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => handlePayCommission(commission.id)}
-                                >
-                                  Pagar
-                                </Button>
-                              )}
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <h4 className="font-semibold text-foreground">Historial de Comisiones</h4>
+                  {pendingCommissions.length > 0 && (
+                    <Button 
+                      size="sm" 
+                      onClick={handlePayAllCommissions}
+                      disabled={payingAll}
+                      className="gap-2"
+                    >
+                      {payingAll ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Banknote className="h-4 w-4" />
+                      )}
+                      Pagar Todas ({pendingCommissions.length})
+                    </Button>
                   )}
-                </CardContent>
-              </Card>
+                </div>
 
-              {/* Sales List */}
-              <Card className="mt-4">
-                <CardHeader>
-                  <CardTitle className="text-base">Ventas del Vendedor</CardTitle>
-                </CardHeader>
-                <CardContent className="p-0">
-                  {loadingSales ? (
-                    <div className="p-8 text-center">
-                      <Loader2 className="h-6 w-6 animate-spin mx-auto text-muted-foreground" />
-                    </div>
-                  ) : sales.length === 0 ? (
-                    <p className="p-8 text-center text-muted-foreground">
-                      No hay ventas registradas
-                    </p>
-                  ) : (
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Fecha</TableHead>
-                          <TableHead>Cliente</TableHead>
-                          <TableHead className="text-right">Total</TableHead>
-                          <TableHead className="text-center">Pago</TableHead>
-                          <TableHead className="text-center">Boleta</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {sales.map((sale) => (
-                          <TableRow key={sale.id}>
-                            <TableCell className="text-foreground">
-                              {formatDate(sale.createdAt)}
-                            </TableCell>
-                            <TableCell className="text-foreground">
-                              {sale.clientName || 'Venta directa'}
-                            </TableCell>
-                            <TableCell className="text-right text-foreground">
-                              {formatPrice(sale.total)}
-                            </TableCell>
-                            <TableCell className="text-center">
-                              <Badge variant={sale.paymentType === 'cash' ? 'default' : 'secondary'}>
-                                {formatPaymentType(sale.paymentType)}
-                              </Badge>
-                            </TableCell>
-                            <TableCell className="text-center">
-                              {sale.invoiceEmitted ? (
-                                <Badge variant="outline" className="text-success border-success">
-                                  Emitida
-                                </Badge>
-                              ) : (
-                                <Badge variant="outline" className="text-warning border-warning">
-                                  Pendiente
-                                </Badge>
-                              )}
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  )}
-                </CardContent>
-              </Card>
+                {loadingCommissions ? (
+                  <div className="space-y-2">
+                    {[1, 2, 3].map((i) => (
+                      <div key={i} className="animate-pulse rounded-lg border p-4">
+                        <div className="h-4 bg-muted rounded w-1/3 mb-2" />
+                        <div className="h-3 bg-muted rounded w-1/2" />
+                      </div>
+                    ))}
+                  </div>
+                ) : commissions.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground border rounded-lg border-dashed">
+                    <DollarSign className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                    <p>No hay comisiones registradas</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2 max-h-[300px] overflow-y-auto">
+                    {commissions.map((commission) => (
+                      <div 
+                        key={commission.id} 
+                        className={`rounded-lg border p-4 flex items-center justify-between gap-4 ${
+                          commission.isPaid 
+                            ? 'bg-emerald-50/50 dark:bg-emerald-900/10 border-emerald-200 dark:border-emerald-800' 
+                            : 'bg-amber-50/50 dark:bg-amber-900/10 border-amber-200 dark:border-amber-800'
+                        }`}
+                      >
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-1">
+                            {commission.isPaid ? (
+                              <CheckCircle className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                            ) : (
+                              <Clock className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                            )}
+                            <span className="font-semibold text-foreground">
+                              {formatCurrency(commission.commissionAmount)}
+                            </span>
+                            <span className={`text-xs px-2 py-0.5 rounded-full ${
+                              commission.isPaid 
+                                ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' 
+                                : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'
+                            }`}>
+                              {commission.isPaid ? 'Pagada' : 'Pendiente'}
+                            </span>
+                          </div>
+                          <p className="text-sm text-muted-foreground">
+                            Venta: {formatCurrency(commission.saleTotal)} - {commission.commissionRate}% comision
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {formatDate(commission.createdAt)}
+                            {commission.isPaid && commission.paidAt && (
+                              <> - Pagada el {formatDate(commission.paidAt)}</>
+                            )}
+                          </p>
+                        </div>
+                        {!commission.isPaid && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handlePayCommission(commission.id)}
+                            disabled={payingCommission === commission.id}
+                            className="shrink-0"
+                          >
+                            {payingCommission === commission.id ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <>
+                                <Banknote className="h-4 w-4 mr-1" />
+                                Pagar
+                              </>
+                            )}
+                          </Button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Actions */}
+              <div className="flex gap-2 pt-2">
+                <Button 
+                  variant="outline" 
+                  className="flex-1 bg-transparent"
+                  onClick={() => {
+                    setDetailModalOpen(false)
+                    handleEdit(selectedSeller)
+                  }}
+                >
+                  <Pencil className="h-4 w-4 mr-2" />
+                  Editar
+                </Button>
+                <Button
+                  variant="outline"
+                  className="bg-transparent"
+                  onClick={() => setDetailModalOpen(false)}
+                >
+                  <X className="h-4 w-4 mr-2" />
+                  Cerrar
+                </Button>
+              </div>
             </div>
           )}
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowDetailModal(false)}>
-              Cerrar
-            </Button>
-          </DialogFooter>
         </DialogContent>
       </Dialog>
 
       {/* Delete Confirmation */}
       <ConfirmDialog
-        open={!!deleteId}
-        onOpenChange={() => setDeleteId(null)}
-        onConfirm={handleDelete}
+        open={deleteDialogOpen}
+        onOpenChange={setDeleteDialogOpen}
         title="Eliminar Vendedor"
-        description="¿Estás seguro de que deseas eliminar este vendedor? Esta acción no se puede deshacer."
+        description={`¿Estas seguro de eliminar a "${sellerToDelete?.name}"? Esta accion no se puede deshacer.`}
+        confirmText="Eliminar"
+        onConfirm={confirmDelete}
+        variant="destructive"
       />
     </MainLayout>
   )

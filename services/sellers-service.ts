@@ -88,24 +88,25 @@ export const getSellerCommissions = async (sellerId: string): Promise<SellerComm
   const snapshot = await getDocs(
     query(
       collection(firestore, COMMISSIONS_COLLECTION),
-      where('sellerId', '==', sellerId),
-      orderBy('createdAt', 'desc')
+      where('sellerId', '==', sellerId)
     )
   )
-  return snapshot.docs.map((docSnap) => {
-    const data = docSnap.data()
-    return {
-      id: docSnap.id,
-      sellerId: data.sellerId,
-      saleId: data.saleId,
-      saleTotal: data.saleTotal,
-      commissionRate: data.commissionRate,
-      commissionAmount: data.commissionAmount,
-      isPaid: data.isPaid ?? false,
-      paidAt: data.paidAt ? toDate(data.paidAt) : undefined,
-      createdAt: toDate(data.createdAt),
-    }
-  })
+  return snapshot.docs
+    .map((docSnap) => {
+      const data = docSnap.data()
+      return {
+        id: docSnap.id,
+        sellerId: data.sellerId,
+        saleId: data.saleId,
+        saleTotal: data.saleTotal,
+        commissionRate: data.commissionRate,
+        commissionAmount: data.commissionAmount,
+        isPaid: data.isPaid ?? false,
+        paidAt: data.paidAt ? toDate(data.paidAt) : undefined,
+        createdAt: toDate(data.createdAt),
+      }
+    })
+    .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
 }
 
 export const getAllCommissions = async (): Promise<SellerCommission[]> => {
