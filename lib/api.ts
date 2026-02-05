@@ -31,7 +31,7 @@ import {
   payCommission,
   updateSeller,
 } from '@/services/sellers-service'
-import { getDashboardStats, getDebtors, getLowStockProducts } from '@/services/dashboard-service'
+import { getDashboardStats, getDebtors, getLowStockProducts, getSalesLastDays } from '@/services/dashboard-service'
 import { createInvoice, createRemito } from '@/services/invoice-service'
 import { getOrders, updateOrderStatus } from '@/services/orders-service'
 import { doc, updateDoc } from 'firebase/firestore'
@@ -178,6 +178,9 @@ export const sellersApi = {
 export const dashboardApi = {
   async getStats() {
     return getDashboardStats()
+  },
+  async getSalesLastDays(days = 7) {
+    return getSalesLastDays(days)
   },
   async getLowStockProducts(): Promise<Product[]> {
     return getLowStockProducts()

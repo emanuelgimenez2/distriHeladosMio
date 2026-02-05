@@ -4,6 +4,7 @@ export interface User {
   id: string
   email: string
   name: string
+  photoURL?: string
   role: UserRole
   sellerId?: string // If role is 'seller', links to Seller record
   isActive: boolean

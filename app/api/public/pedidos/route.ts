@@ -12,13 +12,20 @@ export async function POST(request: Request) {
   const client = body.client || {}
   const dni = String(client.dni || '').trim()
   const name = String(client.name || '').trim()
+  const cuit = String(client.cuit || '').trim()
   const phone = String(client.phone || '').trim()
   const address = String(client.address || '').trim()
   const email = String(client.email || '').trim()
+  const taxCategory = String(client.taxCategory || '').trim()
+  const total = Number(body.total ?? 0)
 
-  if (!dni || !name || !phone || !address) {
+  if (!dni || !name || !email || !phone || !address || !taxCategory) {
     return NextResponse.json({ message: 'Datos del cliente incompletos' }, { status: 400 })
   }
+  if (total > 100000 && !cuit) {
+    return NextResponse.json({ message: 'CUIL/CUIT requerido para pedidos mayores a $100.000' }, { status: 400 })
+  }
+  const resolvedCuit = cuit || dni
 
   let clientId: string | null = null
   let clientName = name
@@ -29,16 +36,24 @@ export async function POST(request: Request) {
     clientId = doc.id
     const data = doc.data()
     clientName = data.name || name
+    await doc.ref.update({
+      name,
+      cuit: resolvedCuit,
+      email,
+      phone,
+      address,
+      taxCategory,
+      updatedAt: new Date(),
+    })
   } else {
     const clientRef = await adminDb.collection('clientes').add({
       name,
       dni,
-      cuit: dni,
+      cuit: resolvedCuit,
       email,
       phone,
       address,
-      taxCategory: 'consumidor_final',
-      creditLimit: 0,
+      taxCategory,
       currentBalance: 0,
       createdAt: new Date(),
     })

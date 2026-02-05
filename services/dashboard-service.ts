@@ -37,6 +37,40 @@ export const getDashboardStats = async () => {
   }
 }
 
+export const getSalesLastDays = async (days = 7) => {
+  const snapshot = await getDocs(collection(firestore, SALES_COLLECTION))
+  const sales = snapshot.docs.map((docSnap) => docSnap.data())
+
+  const today = new Date()
+  const formatter = new Intl.DateTimeFormat('es-AR', { weekday: 'short' })
+  const buckets = Array.from({ length: days }, (_, index) => {
+    const date = new Date(today)
+    date.setDate(today.getDate() - (days - 1 - index))
+    date.setHours(0, 0, 0, 0)
+    return {
+      key: date.toISOString().slice(0, 10),
+      label: formatter.format(date),
+      total: 0,
+    }
+  })
+
+  const bucketMap = new Map(buckets.map((bucket) => [bucket.key, bucket]))
+
+  sales.forEach((sale) => {
+    const date = toDate(sale.createdAt)
+    date.setHours(0, 0, 0, 0)
+    const key = date.toISOString().slice(0, 10)
+    const bucket = bucketMap.get(key)
+    if (!bucket) return
+    bucket.total += sale.total ?? 0
+  })
+
+  return buckets.map((bucket) => ({
+    day: bucket.label,
+    total: bucket.total,
+  }))
+}
+
 export const getLowStockProducts = async (): Promise<Product[]> => {
   const snapshot = await getDocs(collection(firestore, PRODUCTS_COLLECTION))
   return snapshot.docs

@@ -15,11 +15,13 @@ import {
   X,
   Receipt,
   UserCheck,
+  Home,
 } from 'lucide-react'
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { useAuth } from '@/hooks/use-auth'
 import { signOut } from '@/services/auth-service'
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 
 export function AppSidebar() {
   const pathname = usePathname()
@@ -102,8 +104,34 @@ export function AppSidebar() {
             })}
           </nav>
 
-          {/* Logout */}
-          <div className="px-3 py-4 border-t border-sidebar-border">
+          {/* Footer */}
+          <div className="px-3 py-4 border-t border-sidebar-border space-y-3">
+            <Link
+              href="/"
+              onClick={() => setMobileOpen(false)}
+              className="flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground transition-colors"
+            >
+              <Home className="h-5 w-5" />
+              Volver al inicio
+            </Link>
+            {user && (
+              <div className="flex items-center gap-3 px-4 py-3 rounded-lg bg-sidebar-accent/20">
+                <Avatar className="h-9 w-9">
+                  <AvatarImage src={user.photoURL || ''} alt={user.name || 'Usuario'} />
+                  <AvatarFallback className="text-xs font-semibold">
+                    {(user.name || user.email || 'U').slice(0, 2).toUpperCase()}
+                  </AvatarFallback>
+                </Avatar>
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-sidebar-foreground truncate">
+                    {user.name || 'Usuario'}
+                  </p>
+                  <p className="text-xs text-sidebar-foreground/60 truncate">
+                    {user.role === 'admin' ? 'Administrador' : 'Vendedor'}
+                  </p>
+                </div>
+              </div>
+            )}
             <button
               type="button"
               onClick={() => signOut()}
