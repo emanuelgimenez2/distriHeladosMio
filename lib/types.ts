@@ -65,7 +65,7 @@ export interface Sale {
   source?: 'direct' | 'order'
   items: { productId: string; quantity: number; price: number; name: string }[]
   total: number
-  paymentType: 'cash' | 'credit'
+  paymentType: 'cash' | 'credit' | 'mixed'
   status: 'completed' | 'pending'
   invoiceNumber?: string
   remitoNumber?: string
