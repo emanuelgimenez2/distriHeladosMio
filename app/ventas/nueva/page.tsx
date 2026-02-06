@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { MainLayout } from '@/components/layout/main-layout'
 import { Button } from '@/components/ui/button'
@@ -161,11 +161,14 @@ export default function NuevaVentaPage() {
     }
   }, [paymentType, cartTotal])
 
+  // MODIFICADO: Cliente requerido para todos los tipos de pago
   const canProcessSale = () => {
     if (cart.length === 0) return false
+    // Cliente requerido para TODOS los tipos de pago (incluido contado)
+    if (!selectedClient) return false
+    if (!selectedClientData) return false
+    
     if (paymentType === 'credit' || paymentType === 'mixed') {
-      if (!selectedClient) return false
-      if (!selectedClientData) return false
       const amountToCredit = paymentType === 'credit' ? cartTotal : creditAmount
       if (selectedClientData.currentBalance + amountToCredit > selectedClientData.creditLimit) return false
     }
@@ -178,10 +181,10 @@ export default function NuevaVentaPage() {
     setProcessing(true)
     try {
       const resolvedClientPhone = clientPhone || selectedClientData?.phone
-      const resolvedClientName = paymentType !== 'cash' ? selectedClientData?.name : undefined
+      const resolvedClientName = selectedClientData?.name
 
       const sale = await salesApi.processSale({
-        clientId: paymentType !== 'cash' ? selectedClient : undefined,
+        clientId: selectedClient,
         clientName: resolvedClientName,
         clientPhone: resolvedClientPhone,
         sellerId: selectedSeller || undefined,
@@ -228,9 +231,9 @@ export default function NuevaVentaPage() {
     setGeneratingDoc(true)
     try {
       const invoice = await invoiceApi.createInvoice(lastSaleId, {
-        name: paymentType !== 'cash' ? selectedClientData?.name : undefined,
+        name: selectedClientData?.name,
         phone: clientPhone || selectedClientData?.phone,
-        email: paymentType !== 'cash' ? selectedClientData?.email : undefined,
+        email: selectedClientData?.email,
       })
       setInvoiceNumber(invoice.invoiceNumber)
       setInvoicePdfUrl(invoice.pdfUrl)
@@ -321,7 +324,7 @@ export default function NuevaVentaPage() {
       ) : (
         <>
           {/* Cart Items */}
-          <div className="flex-1 overflow-y-auto space-y-2 pr-1">
+          <div className="flex-1 overflow-y-auto space-y-2 pr-1 pb-4">
             {cart.map((item) => (
               <div
                 key={item.product.id}
@@ -330,13 +333,13 @@ export default function NuevaVentaPage() {
                 <img
                   src={item.product.imageUrl || '/placeholder.svg'}
                   alt={item.product.name}
-                  className="w-14 h-14 rounded-lg object-cover"
+                  className="w-14 h-14 rounded-lg object-cover shrink-0"
                 />
                 <div className="flex-1 min-w-0">
                   <p className="font-medium text-sm text-foreground truncate">{item.product.name}</p>
                   <p className="text-xs text-muted-foreground">{formatCurrency(item.product.price)}</p>
                 </div>
-                <div className="flex items-center gap-1">
+                <div className="flex items-center gap-1 shrink-0">
                   <Button
                     variant="outline"
                     size="icon"
@@ -370,10 +373,69 @@ export default function NuevaVentaPage() {
           </div>
 
           {/* Total */}
-          <div className="border-t border-border pt-4 mt-4 space-y-4">
+          <div className="border-t border-border pt-4 mt-auto space-y-4 bg-background">
             <div className="flex justify-between items-center">
               <span className="text-muted-foreground">Total</span>
               <span className="text-2xl font-bold text-foreground">{formatCurrency(cartTotal)}</span>
+            </div>
+
+            {/* MODIFICADO: Cliente requerido para todos los pagos */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label className="text-xs text-muted-foreground">
+                  Cliente <span className="text-destructive">*</span>
+                </Label>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 text-xs gap-1 text-primary"
+                  onClick={() => setNewClientModalOpen(true)}
+                >
+                  <UserPlus className="h-3 w-3" />
+                  Nuevo
+                </Button>
+              </div>
+              <Select value={selectedClient} onValueChange={setSelectedClient}>
+                <SelectTrigger className="h-10">
+                  <SelectValue placeholder="Seleccionar cliente" />
+                </SelectTrigger>
+                <SelectContent>
+                  {clients.map((client) => (
+                    <SelectItem key={client.id} value={client.id}>
+                      {client.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {selectedClientData && (
+                <div className="p-3 rounded-xl bg-muted/50 text-sm space-y-1">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Saldo actual</span>
+                    <span className="text-foreground">{formatCurrency(selectedClientData.currentBalance)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Limite</span>
+                    <span className="text-foreground">{formatCurrency(selectedClientData.creditLimit)}</span>
+                  </div>
+                  {(paymentType === 'credit' || paymentType === 'mixed') && (
+                    <div className="flex justify-between pt-2 border-t border-border">
+                      <span className="text-muted-foreground">Disponible</span>
+                      <span
+                        className={`font-semibold ${
+                          selectedClientData.creditLimit - selectedClientData.currentBalance - creditAmount < 0
+                            ? 'text-destructive'
+                            : 'text-emerald-600'
+                        }`}
+                      >
+                        {formatCurrency(
+                          selectedClientData.creditLimit - selectedClientData.currentBalance - creditAmount
+                        )}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Seller Selection */}
@@ -465,71 +527,21 @@ export default function NuevaVentaPage() {
               </div>
             )}
 
-            {/* Client Selection */}
-            {(paymentType === 'credit' || paymentType === 'mixed') && (
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <Label className="text-xs text-muted-foreground">Cliente</Label>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="h-6 text-xs gap-1 text-primary"
-                    onClick={() => setNewClientModalOpen(true)}
-                  >
-                    <UserPlus className="h-3 w-3" />
-                    Nuevo
-                  </Button>
-                </div>
-                <Select value={selectedClient} onValueChange={setSelectedClient}>
-                  <SelectTrigger className="h-10">
-                    <SelectValue placeholder="Seleccionar cliente" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {clients.map((client) => (
-                      <SelectItem key={client.id} value={client.id}>
-                        {client.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {selectedClientData && (
-                  <div className="p-3 rounded-xl bg-muted/50 text-sm space-y-1">
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Saldo actual</span>
-                      <span className="text-foreground">{formatCurrency(selectedClientData.currentBalance)}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Limite</span>
-                      <span className="text-foreground">{formatCurrency(selectedClientData.creditLimit)}</span>
-                    </div>
-                    <div className="flex justify-between pt-2 border-t border-border">
-                      <span className="text-muted-foreground">Disponible</span>
-                      <span
-                        className={`font-semibold ${
-                          selectedClientData.creditLimit - selectedClientData.currentBalance - creditAmount < 0
-                            ? 'text-destructive'
-                            : 'text-emerald-600'
-                        }`}
-                      >
-                        {formatCurrency(
-                          selectedClientData.creditLimit - selectedClientData.currentBalance - creditAmount
-                        )}
-                      </span>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Phone */}
+            {/* Phone - CORREGIDO: Input normal sin comportamiento raro */}
             <div className="space-y-2">
               <Label className="text-xs text-muted-foreground">Telefono (opcional)</Label>
               <Input
+                type="tel"
+                inputMode="tel"
                 placeholder="11 1234 5678"
                 value={clientPhone}
                 onChange={(e) => setClientPhone(e.target.value)}
                 className="h-10"
+                // Prevenir scroll en focus para mobile
+                onFocus={(e) => {
+                  // Prevenir que el input se mueva al enfocar
+                  e.target.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+                }}
               />
             </div>
 
@@ -822,7 +834,7 @@ export default function NuevaVentaPage() {
           </Card>
         </div>
 
-        {/* Cart FAB - Mobile */}
+        {/* Cart FAB - Mobile - CORREGIDO: Sheet mejorado para no romperse */}
         <div className="lg:hidden fixed bottom-6 right-6 z-50">
           <Sheet open={cartSheetOpen} onOpenChange={setCartSheetOpen}>
             <SheetTrigger asChild>
@@ -839,8 +851,12 @@ export default function NuevaVentaPage() {
                 )}
               </Button>
             </SheetTrigger>
-            <SheetContent side="bottom" className="h-[90vh] rounded-t-3xl">
-              <SheetHeader className="pb-4 border-b border-border">
+            {/* CORREGIDO: Sheet con altura fija y mejor manejo de overflow */}
+            <SheetContent 
+              side="bottom" 
+              className="h-[85vh] sm:h-[90vh] rounded-t-3xl flex flex-col p-0"
+            >
+              <SheetHeader className="px-6 py-4 border-b border-border shrink-0">
                 <div className="flex items-center justify-between">
                   <SheetTitle className="flex items-center gap-2">
                     <ShoppingCart className="h-5 w-5 text-primary" />
@@ -849,16 +865,10 @@ export default function NuevaVentaPage() {
                       <Badge variant="secondary">{cartItemsCount} items</Badge>
                     )}
                   </SheetTitle>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => setCartSheetOpen(false)}
-                  >
-                    <X className="h-5 w-5" />
-                  </Button>
                 </div>
               </SheetHeader>
-              <div className="pt-4 h-[calc(100%-80px)] overflow-y-auto">
+              {/* CORREGIDO: Contenedor con scroll proper y padding bottom para evitar que se corte */}
+              <div className="flex-1 overflow-y-auto px-6 py-4 pb-32">
                 <CartContent />
               </div>
             </SheetContent>
@@ -885,7 +895,7 @@ export default function NuevaVentaPage() {
 
       {/* New Client Modal */}
       <Dialog open={newClientModalOpen} onOpenChange={setNewClientModalOpen}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
@@ -930,6 +940,8 @@ export default function NuevaVentaPage() {
                 <Label htmlFor="newClientPhone">Telefono</Label>
                 <Input
                   id="newClientPhone"
+                  type="tel"
+                  inputMode="tel"
                   value={newClientForm.phone}
                   onChange={(e) => setNewClientForm({ ...newClientForm, phone: e.target.value })}
                   placeholder="11 1234 5678"
