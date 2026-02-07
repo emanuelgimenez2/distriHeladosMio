@@ -24,6 +24,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogFooter,
+  DialogDescription, // ← AÑADE ESTO
 } from "@/components/ui/dialog";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
@@ -215,15 +216,7 @@ export function StoreFront({
           throw new Error("Error cargando productos");
         }
         const data = await response.json();
-        console.log("🔍 Productos desde API:", data.products);
-        console.log(
-          "🔍 Productos con disabled:",
-          data.products.filter((p: any) => p.disabled),
-        );
-        console.log(
-          "🔍 Productos SIN disabled:",
-          data.products.filter((p: any) => !p.hasOwnProperty("disabled")),
-        );
+        
 
         setProducts(data.products || []);
         setClients([]);
@@ -234,15 +227,7 @@ export function StoreFront({
         productsApi.getAll(),
         clientsApi.getAll(),
       ]);
-      console.log("🔍 Productos desde API (no public):", productsData);
-      console.log(
-        "🔍 Productos con disabled:",
-        productsData.filter((p: any) => p.disabled),
-      );
-      console.log(
-        "🔍 Productos SIN disabled:",
-        productsData.filter((p: any) => !p.hasOwnProperty("disabled")),
-      );
+      
 
       setProducts(productsData);
       setClients(clientsData);
@@ -310,12 +295,7 @@ export function StoreFront({
       matchesPrice
     );
   });
-  console.log("🔍 Total productos:", products.length);
-  console.log("🔍 Productos filtrados:", filteredProducts.length);
-  console.log(
-    "🔍 Productos deshabilitados detectados:",
-    products.filter((p: any) => (p as any).disabled === true).length,
-  );
+ 
   const addToCart = (product: Product) => {
     setCart((prev) => {
       const existing = prev.find((item) => item.product.id === product.id);
@@ -734,6 +714,9 @@ export function StoreFront({
                 </div>
                 Carrito de Compras
               </DialogTitle>
+              <DialogDescription>
+                Revisa y modifica los productos en tu carrito
+              </DialogDescription>
             </DialogHeader>
 
             {cart.length === 0 ? (
@@ -756,6 +739,7 @@ export function StoreFront({
                         <Image
                           src={item.product.imageUrl || "/placeholder.svg"}
                           alt={item.product.name}
+                          loading="eager"
                           fill
                           className="object-cover"
                         />
@@ -1038,6 +1022,7 @@ export function StoreFront({
                       <Image
                         src={product.imageUrl || "/placeholder.svg"}
                         alt={product.name}
+                        loading="eager"
                         fill
                         className="object-cover transition-transform duration-300 group-hover:scale-105"
                       />
@@ -1126,6 +1111,9 @@ export function StoreFront({
           <DialogContent className="sm:max-w-md">
             <DialogHeader>
               <DialogTitle>Filtros</DialogTitle>
+              <DialogDescription>
+                Filtra productos por categoría, precio, disponibilidad y más
+              </DialogDescription>
             </DialogHeader>
             <div className="space-y-4">
               <div>
@@ -1281,6 +1269,11 @@ export function StoreFront({
               <DialogTitle>
                 {isPublicStore ? "Confirmar Pedido" : "Método de Pago"}
               </DialogTitle>
+              <DialogDescription>
+                {isPublicStore
+                  ? "Completa tus datos para confirmar el pedido"
+                  : "Selecciona el método de pago para continuar"}
+              </DialogDescription>
             </DialogHeader>
 
             <div className="py-4">
@@ -1523,6 +1516,11 @@ export function StoreFront({
               <DialogTitle className="sr-only">
                 {isPublicStore ? "Pedido Recibido" : "Venta Completada"}
               </DialogTitle>
+              <DialogDescription className="sr-only">
+                {isPublicStore
+                  ? "Tu pedido fue generado correctamente"
+                  : "La venta se procesó exitosamente"}
+              </DialogDescription>
             </DialogHeader>
             <div className="text-center py-2">
               <div className="mx-auto h-16 w-16 rounded-full bg-success/10 flex items-center justify-center mb-4 ring-1 ring-success/20">
