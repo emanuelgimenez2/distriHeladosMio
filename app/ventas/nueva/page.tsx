@@ -228,7 +228,10 @@ export default function NuevaVentaPage() {
         clientId: selectedClient,
         clientName: resolvedClientName,
         clientPhone: resolvedClientPhone,
-        sellerId: selectedSeller || undefined,
+        sellerId:
+          selectedSeller && selectedSeller !== "none"
+            ? selectedSeller
+            : undefined,
         sellerName: selectedSellerData?.name,
         items: cart,
         paymentType,
@@ -892,8 +895,12 @@ export default function NuevaVentaPage() {
       </div>
 
       {/* Cart Dialog - SOLUCIÓN 2: Modal para todos los dispositivos */}
+      {/* Cart Dialog - SOLUCIÓN 2: Modal para todos los dispositivos */}
       <Dialog open={cartDialogOpen} onOpenChange={setCartDialogOpen}>
-        <DialogContent className="max-w-md max-h-[85vh] overflow-y-auto p-0 gap-0 sm:max-w-lg">
+        <DialogContent
+          className="max-w-md max-h-[85vh] overflow-y-auto p-0 gap-0 sm:max-w-lg"
+          onOpenAutoFocus={(e) => e.preventDefault()}
+        >
           <DialogHeader className="px-4 py-3 border-b border-border">
             <DialogDescription className="sr-only">
               Revisa y gestiona los productos en tu carrito de compras
