@@ -1,59 +1,64 @@
-'use client'
+"use client";
 
-import React, { useEffect, useState, useRef } from 'react'
+import React, { useEffect, useState, useRef } from "react";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
   DialogDescription,
-} from '@/components/ui/dialog'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
-import { Badge } from '@/components/ui/badge'
-import { Switch } from '@/components/ui/switch'
-import { Separator } from '@/components/ui/separator'
-import type { Product } from '@/lib/types'
-import { Loader2, Upload, ImageIcon, X, Check } from 'lucide-react'
-import { cn } from '@/lib/utils'
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
+import { Separator } from "@/components/ui/separator";
+import type { Product } from "@/lib/types";
+import { Loader2, Upload, ImageIcon, X, Check } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 interface ProductModalProps {
-  open: boolean
-  onOpenChange: (open: boolean) => void
-  product: Product | null
-  onSave: (product: Omit<Product, 'id' | 'createdAt'>) => Promise<void>
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  product: Product | null;
+  onSave: (product: Omit<Product, "id" | "createdAt">) => Promise<void>;
 }
 
-const CATEGORIES = ['Clásicos', 'Premium', 'Especiales', 'Frutas'] as const
+const CATEGORIES = ["Clásicos", "Premium", "Especiales", "Frutas"] as const;
 const BASES = [
-  { id: 'crema', label: 'Crema', description: 'Base cremosa y suave' },
-  { id: 'agua', label: 'Agua', description: 'Base ligera y refrescante' },
-] as const
+  { id: "crema", label: "Crema", description: "Base cremosa y suave" },
+  { id: "agua", label: "Agua", description: "Base ligera y refrescante" },
+] as const;
 
-export function ProductModal({ open, onOpenChange, product, onSave }: ProductModalProps) {
-  const [loading, setLoading] = useState(false)
-  const [imagePreview, setImagePreview] = useState<string | null>(null)
-  const fileInputRef = useRef<HTMLInputElement>(null)
-  
+export function ProductModal({
+  open,
+  onOpenChange,
+  product,
+  onSave,
+}: ProductModalProps) {
+  const [loading, setLoading] = useState(false);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   const [formData, setFormData] = useState({
-    name: '',
-    description: '',
+    name: "",
+    description: "",
     price: 0,
     stock: 0,
-    imageUrl: '',
-    category: '',
-    base: 'crema' as 'crema' | 'agua',
+    imageUrl: "",
+    category: "",
+    base: "crema" as "crema" | "agua",
     sinTacc: false,
-  })
+  });
 
   // Limpiar preview cuando se cierra el modal
   useEffect(() => {
     if (!open) {
-      setImagePreview(null)
+      setImagePreview(null);
     }
-  }, [open])
+  }, [open]);
 
   useEffect(() => {
     if (product) {
@@ -64,55 +69,63 @@ export function ProductModal({ open, onOpenChange, product, onSave }: ProductMod
         stock: product.stock,
         imageUrl: product.imageUrl,
         category: product.category,
-        base: (product as any).base || 'crema',
+        base: (product as any).base || "crema",
         sinTacc: (product as any).sinTacc || false,
-      })
-      setImagePreview(product.imageUrl || null)
+      });
+      setImagePreview(product.imageUrl || null);
     } else {
       setFormData({
-        name: '',
-        description: '',
+        name: "",
+        description: "",
         price: 0,
         stock: 0,
-        imageUrl: '',
-        category: '',
-        base: 'crema',
+        imageUrl: "",
+        category: "",
+        base: "crema",
         sinTacc: false,
-      })
-      setImagePreview(null)
+      });
+      setImagePreview(null);
     }
-  }, [product, open])
+  }, [product, open]);
 
-  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (file) {
-      const url = URL.createObjectURL(file)
-      setImagePreview(url)
-      // Simulamos una URL para el form (en producción subirías a storage)
-      setFormData(prev => ({ ...prev, imageUrl: url }))
-    }
-  }
+  const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const base64 = await fileToBase64(file);
+
+    setImagePreview(base64);
+    setFormData((prev) => ({ ...prev, imageUrl: base64 }));
+  };
 
   const clearImage = () => {
-    setImagePreview(null)
-    setFormData(prev => ({ ...prev, imageUrl: '' }))
+    setImagePreview(null);
+    setFormData((prev) => ({ ...prev, imageUrl: "" }));
     if (fileInputRef.current) {
-      fileInputRef.current.value = ''
+      fileInputRef.current.value = "";
     }
-  }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setLoading(true)
+    e.preventDefault();
+    setLoading(true);
     try {
-      await onSave(formData)
+      await onSave(formData);
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
-
-  const isEditing = !!product
-  const isValid = formData.name.trim() && formData.category && formData.price > 0
+  };
+  const fileToBase64 = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  };
+  const isEditing = !!product;
+  const isValid =
+    formData.name.trim() && formData.category && formData.price > 0;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -120,17 +133,16 @@ export function ProductModal({ open, onOpenChange, product, onSave }: ProductMod
         {/* Header */}
         <DialogHeader className="px-6 pt-6 pb-4 border-b border-border/50">
           <DialogTitle className="text-xl font-semibold">
-            {isEditing ? 'Editar Producto' : 'Nuevo Producto'}
+            {isEditing ? "Editar Producto" : "Nuevo Producto"}
           </DialogTitle>
           <DialogDescription className="text-sm text-muted-foreground">
-            {isEditing 
-              ? 'Actualizá la información del producto' 
-              : 'Completá la información básica para crear el producto'}
+            {isEditing
+              ? "Actualizá la información del producto"
+              : "Completá la información básica para crear el producto"}
           </DialogDescription>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="px-6 py-4 space-y-6">
-          
           {/* Sección: Información Básica */}
           <div className="space-y-4">
             <div className="space-y-2">
@@ -140,7 +152,9 @@ export function ProductModal({ open, onOpenChange, product, onSave }: ProductMod
               <Input
                 id="name"
                 value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                onChange={(e) =>
+                  setFormData({ ...formData, name: e.target.value })
+                }
                 placeholder="Ej: Helado de Chocolate Suizo"
                 className="h-11"
                 autoFocus
@@ -154,13 +168,16 @@ export function ProductModal({ open, onOpenChange, product, onSave }: ProductMod
               <Textarea
                 id="description"
                 value={formData.description}
-                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                onChange={(e) =>
+                  setFormData({ ...formData, description: e.target.value })
+                }
                 placeholder="Breve descripción del sabor y características..."
                 rows={2}
                 className="resize-none"
               />
               <p className="text-xs text-muted-foreground">
-                Ayuda a los clientes a entender qué hace especial a este producto
+                Ayuda a los clientes a entender qué hace especial a este
+                producto
               </p>
             </div>
           </div>
@@ -183,7 +200,7 @@ export function ProductModal({ open, onOpenChange, product, onSave }: ProductMod
                       "relative flex items-center justify-center px-4 py-3 rounded-lg border-2 text-sm font-medium transition-all",
                       formData.category === cat
                         ? "border-primary bg-primary/5 text-primary"
-                        : "border-border bg-background hover:border-primary/30 hover:bg-muted/50"
+                        : "border-border bg-background hover:border-primary/30 hover:bg-muted/50",
                     )}
                   >
                     {formData.category === cat && (
@@ -196,24 +213,35 @@ export function ProductModal({ open, onOpenChange, product, onSave }: ProductMod
             </div>
 
             <div>
-              <Label className="text-sm font-medium mb-3 block">Base del helado</Label>
+              <Label className="text-sm font-medium mb-3 block">
+                Base del helado
+              </Label>
               <div className="grid grid-cols-2 gap-3">
                 {BASES.map((base) => (
                   <button
                     key={base.id}
                     type="button"
-                    onClick={() => setFormData({ ...formData, base: base.id as 'crema' | 'agua' })}
+                    onClick={() =>
+                      setFormData({
+                        ...formData,
+                        base: base.id as "crema" | "agua",
+                      })
+                    }
                     className={cn(
                       "flex flex-col items-start p-4 rounded-lg border-2 text-left transition-all",
                       formData.base === base.id
                         ? "border-primary bg-primary/5"
-                        : "border-border bg-background hover:border-primary/30"
+                        : "border-border bg-background hover:border-primary/30",
                     )}
                   >
-                    <span className={cn(
-                      "font-semibold mb-1",
-                      formData.base === base.id ? "text-primary" : "text-foreground"
-                    )}>
+                    <span
+                      className={cn(
+                        "font-semibold mb-1",
+                        formData.base === base.id
+                          ? "text-primary"
+                          : "text-foreground",
+                      )}
+                    >
                       {base.label}
                     </span>
                     <span className="text-xs text-muted-foreground leading-relaxed">
@@ -227,7 +255,10 @@ export function ProductModal({ open, onOpenChange, product, onSave }: ProductMod
             {/* Sin TACC Switch */}
             <div className="flex items-center justify-between p-4 rounded-lg border border-border bg-muted/30">
               <div className="space-y-0.5">
-                <Label htmlFor="sin-tacc" className="text-sm font-medium cursor-pointer">
+                <Label
+                  htmlFor="sin-tacc"
+                  className="text-sm font-medium cursor-pointer"
+                >
                   Producto Sin TACC
                 </Label>
                 <p className="text-xs text-muted-foreground">
@@ -237,7 +268,9 @@ export function ProductModal({ open, onOpenChange, product, onSave }: ProductMod
               <Switch
                 id="sin-tacc"
                 checked={formData.sinTacc}
-                onCheckedChange={(checked) => setFormData({ ...formData, sinTacc: checked })}
+                onCheckedChange={(checked) =>
+                  setFormData({ ...formData, sinTacc: checked })
+                }
               />
             </div>
           </div>
@@ -249,7 +282,10 @@ export function ProductModal({ open, onOpenChange, product, onSave }: ProductMod
             <Label className="text-sm font-medium">Precio y Stock</Label>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="price" className="text-xs text-muted-foreground">
+                <Label
+                  htmlFor="price"
+                  className="text-xs text-muted-foreground"
+                >
                   Precio (ARS)
                 </Label>
                 <div className="relative">
@@ -261,23 +297,33 @@ export function ProductModal({ open, onOpenChange, product, onSave }: ProductMod
                     type="number"
                     min="0"
                     step="100"
-                    value={formData.price || ''}
-                    onChange={(e) => setFormData({ ...formData, price: Number(e.target.value) })}
+                    value={formData.price || ""}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        price: Number(e.target.value),
+                      })
+                    }
                     className="pl-7 h-11"
                     placeholder="0"
                   />
                 </div>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="stock" className="text-xs text-muted-foreground">
+                <Label
+                  htmlFor="stock"
+                  className="text-xs text-muted-foreground"
+                >
                   Unidades disponibles
                 </Label>
                 <Input
                   id="stock"
                   type="number"
                   min="0"
-                  value={formData.stock || ''}
-                  onChange={(e) => setFormData({ ...formData, stock: Number(e.target.value) })}
+                  value={formData.stock || ""}
+                  onChange={(e) =>
+                    setFormData({ ...formData, stock: Number(e.target.value) })
+                  }
                   className="h-11"
                   placeholder="0"
                 />
@@ -290,7 +336,7 @@ export function ProductModal({ open, onOpenChange, product, onSave }: ProductMod
           {/* Sección: Imagen */}
           <div className="space-y-3">
             <Label className="text-sm font-medium">Imagen del producto</Label>
-            
+
             {imagePreview ? (
               <div className="relative aspect-video rounded-lg overflow-hidden border border-border bg-muted group">
                 <img
@@ -338,7 +384,7 @@ export function ProductModal({ open, onOpenChange, product, onSave }: ProductMod
                 </div>
               </div>
             )}
-            
+
             <input
               ref={fileInputRef}
               type="file"
@@ -346,11 +392,14 @@ export function ProductModal({ open, onOpenChange, product, onSave }: ProductMod
               onChange={handleImageChange}
               className="hidden"
             />
-            
+
             {/* Input alternativo por URL */}
             {!imagePreview && (
               <div className="space-y-2">
-                <Label htmlFor="imageUrl" className="text-xs text-muted-foreground">
+                <Label
+                  htmlFor="imageUrl"
+                  className="text-xs text-muted-foreground"
+                >
                   O pegá una URL
                 </Label>
                 <div className="relative">
@@ -359,8 +408,8 @@ export function ProductModal({ open, onOpenChange, product, onSave }: ProductMod
                     id="imageUrl"
                     value={formData.imageUrl}
                     onChange={(e) => {
-                      setFormData({ ...formData, imageUrl: e.target.value })
-                      setImagePreview(e.target.value)
+                      setFormData({ ...formData, imageUrl: e.target.value });
+                      setImagePreview(e.target.value);
                     }}
                     placeholder="https://..."
                     className="pl-9 text-sm"
@@ -380,17 +429,17 @@ export function ProductModal({ open, onOpenChange, product, onSave }: ProductMod
             >
               Cancelar
             </Button>
-            <Button 
-              type="submit" 
+            <Button
+              type="submit"
               disabled={loading || !isValid}
               className="min-w-[120px]"
             >
               {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              {isEditing ? 'Guardar Cambios' : 'Crear Producto'}
+              {isEditing ? "Guardar Cambios" : "Crear Producto"}
             </Button>
           </div>
         </form>
       </DialogContent>
     </Dialog>
-  )
+  );
 }

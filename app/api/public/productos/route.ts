@@ -5,19 +5,28 @@ export const runtime = 'nodejs'
 
 export async function GET() {
   const snapshot = await adminDb.collection('productos').get()
-  const products = snapshot.docs.map((doc) => {
-    const data = doc.data()
-    return {
-      id: doc.id,
-      name: data.name,
-      description: data.description,
-      price: data.price,
-      stock: data.stock,
-      imageUrl: data.imageUrl,
-      category: data.category,
-      createdAt: data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : null,
-    }
-  })
+  
+  const products = snapshot.docs
+    .map((doc) => {
+      const data = doc.data()
+      return {
+        id: doc.id,
+        name: data.name,
+        description: data.description,
+        price: data.price,
+        stock: data.stock,
+        imageUrl: data.imageUrl,
+        category: data.category,
+        createdAt: data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : null,
+        
+        // ✅ NUEVOS CAMPOS:
+        base: data.base ?? 'crema',
+        sinTacc: data.sinTacc ?? false,
+        disabled: data.disabled ?? false,
+      }
+    })
+    // ✅ FILTRAR productos deshabilitados
+    .filter(product => product.disabled !== true)
 
   return NextResponse.json({ products })
 }
