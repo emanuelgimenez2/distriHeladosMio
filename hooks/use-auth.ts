@@ -21,7 +21,6 @@ export const useAuth = () => {
         id: firebaseUser.uid,
         email: firebaseUser.email || '',
         name: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'Usuario',
-        photoURL: firebaseUser.photoURL || undefined,
       })
       if (!profile.isActive) {
         await signOut()

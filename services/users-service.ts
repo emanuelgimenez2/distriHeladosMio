@@ -11,7 +11,6 @@ export const getUserProfile = async (userId: string): Promise<User | null> => {
     id: snapshot.id,
     email: data.email,
     name: data.name,
-    photoURL: data.photoURL ?? undefined,
     role: data.role as UserRole,
     sellerId: data.sellerId,
     isActive: data.isActive ?? true,
@@ -23,16 +22,10 @@ export const ensureUserProfile = async (data: {
   id: string
   email: string
   name: string
-  photoURL?: string
   role?: UserRole
 }): Promise<User> => {
   const existing = await getUserProfile(data.id)
-  if (existing) {
-    return {
-      ...existing,
-      photoURL: existing.photoURL ?? data.photoURL,
-    }
-  }
+  if (existing) return existing
 
   const sellersSnapshot = await getDocs(
     query(collection(firestore, 'vendedores'), where('email', '==', data.email))
@@ -43,7 +36,6 @@ export const ensureUserProfile = async (data: {
     id: data.id,
     email: data.email,
     name: data.name,
-    photoURL: data.photoURL,
     role: data.role ?? 'customer',
     sellerId: matchingSeller,
     isActive: true,
@@ -53,7 +45,6 @@ export const ensureUserProfile = async (data: {
   await setDoc(doc(firestore, 'usuarios', data.id), {
     email: profile.email,
     name: profile.name,
-    photoURL: profile.photoURL ?? null,
     role: profile.role,
     sellerId: profile.sellerId ?? null,
     isActive: profile.isActive,

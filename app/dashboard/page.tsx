@@ -877,7 +877,7 @@ export default function DashboardPage() {
               </Badge>
             </CardHeader>
             <CardContent className="p-2 sm:p-3 pt-0">
-              <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
+              <div className="grid grid-cols- sm:grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
                 {pendingOrders.slice(0, 10000000000000000000000).map((order) => {
                   const StatusIcon = statusMeta[order.status].icon
                   const itemsCount = order.items.reduce((acc, item) => acc + item.quantity, 0)

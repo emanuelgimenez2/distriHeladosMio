@@ -1,6 +1,8 @@
+// app/ventas/nueva/page.tsx - CORREGIDO
+
 "use client";
 
-import { useEffect, useState, memo } from "react";
+import { useEffect, useState, memo, useRef } from "react";
 import React from "react";
 import { useRouter } from "next/navigation";
 import { MainLayout } from "@/components/layout/main-layout";
@@ -16,7 +18,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogDescription,
+  DialogDescription, // AGREGADO
   DialogFooter,
 } from "@/components/ui/dialog";
 import {
@@ -30,7 +32,6 @@ import {
   productsApi,
   clientsApi,
   salesApi,
-  invoiceApi,
   remitoApi,
   sellersApi,
 } from "@/lib/api";
@@ -53,8 +54,12 @@ import {
   Sparkles,
   Package,
   X,
+  Printer,
+  Download,
 } from "lucide-react";
 import { toast } from "sonner";
+import { useAfipInvoice } from "@/hooks/use-afip-invoice";
+import { BoletaDocument } from "@/components/documentos/boleta-document";
 
 export default function NuevaVentaPage() {
   const router = useRouter();
@@ -97,6 +102,20 @@ export default function NuevaVentaPage() {
   useEffect(() => {
     loadData();
   }, []);
+
+  const [showBoletaModal, setShowBoletaModal] = useState(false);
+  const boletaRef = useRef<HTMLDivElement>(null);
+
+  const {
+    emitirFactura,
+    isLoading: isEmittingInvoice,
+    lastInvoice,
+  } = useAfipInvoice({
+    onSuccess: (data) => {
+      setInvoiceNumber(data.invoiceNumber);
+      setInvoicePdfUrl(data.pdfUrl);
+    },
+  });
 
   const loadData = async () => {
     try {
@@ -171,20 +190,41 @@ export default function NuevaVentaPage() {
   const selectedClientData = clients.find((c) => c.id === selectedClient);
   const selectedSellerData = sellers.find((s) => s.id === selectedSeller);
 
-  // SOLUCIÓN 1: Corregir problema del teléfono - usar onChange correctamente
   const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setClientPhone(e.target.value);
   };
 
-  // SOLUCIÓN 1: Eliminar este useEffect problemático
-  // useEffect(() => {
-  //   if (
-  //     (paymentType === "credit" || paymentType === "mixed") &&
-  //     selectedClientData?.phone
-  //   ) {
-  //     setClientPhone(selectedClientData.phone);
-  //   }
-  // }, [paymentType, selectedClientData]);
+  const handlePrintBoleta = () => {
+    const printWindow = window.open("", "_blank");
+    if (!printWindow) return;
+
+    const boletaHTML = boletaRef.current?.outerHTML;
+    printWindow.document.write(`
+    <html>
+      <head>
+        <title>Boleta ${lastInvoice?.invoiceNumber || ""}</title>
+        <style>
+          @media print {
+            body { margin: 0; }
+            .no-print { display: none; }
+          }
+        </style>
+      </head>
+      <body>
+        ${boletaHTML}
+        <script>
+          window.onload = () => {
+            setTimeout(() => {
+              window.print();
+              window.close();
+            }, 100);
+          };
+        </script>
+      </body>
+    </html>
+  `);
+    printWindow.document.close();
+  };
 
   useEffect(() => {
     if (paymentType === "cash") {
@@ -192,7 +232,6 @@ export default function NuevaVentaPage() {
     } else if (paymentType === "credit") {
       setCashAmount(0);
     } else if (paymentType === "mixed") {
-      // Solo actualizar si el cashAmount actual es inválido
       if (cashAmount === 0 || cashAmount >= cartTotal) {
         setCashAmount(Math.floor(cartTotal / 2));
       }
@@ -284,14 +323,22 @@ export default function NuevaVentaPage() {
     if (!lastSaleId) return;
     setGeneratingDoc(true);
     try {
-      const invoice = await invoiceApi.createInvoice(lastSaleId, {
+      const result = await emitirFactura(lastSaleId, {
         name: selectedClientData?.name,
         phone: clientPhone || selectedClientData?.phone,
         email: selectedClientData?.email,
+        taxCategory: selectedClientData?.taxCategory, // IMPORTANTE: Campo obligatorio
+        cuit: selectedClientData?.cuit,
       });
-      setInvoiceNumber(invoice.invoiceNumber);
-      setInvoicePdfUrl(invoice.pdfUrl);
-      toast.success("Boleta generada correctamente");
+
+      setInvoiceNumber(result.invoiceNumber);
+      setInvoicePdfUrl(result.pdfUrl);
+
+      toast.success(
+        result.mock
+          ? "Boleta generada (modo prueba)"
+          : `Factura ${result.invoiceNumber} emitida en AFIP`,
+      );
     } catch (error) {
       console.error("Error generating invoice:", error);
       toast.error("Error al generar la boleta");
@@ -364,8 +411,6 @@ export default function NuevaVentaPage() {
     }).format(amount);
   };
 
-  // VERSIÓN SUPER COMPACTA DEL CARRITO
-  // VERSIÓN SUPER COMPACTA DEL CARRITO
   const CartContent = React.memo(() => (
     <div className="flex flex-col h-full">
       {cart.length === 0 ? (
@@ -380,7 +425,6 @@ export default function NuevaVentaPage() {
         </div>
       ) : (
         <>
-          {/* Items SUPER COMPACTOS */}
           <div className="flex-1 overflow-y-auto space-y-1 pr-0.5 pb-2 max-h-[160px]">
             {cart.map((item) => (
               <div
@@ -433,9 +477,7 @@ export default function NuevaVentaPage() {
             ))}
           </div>
 
-          {/* Sección inferior SUPER COMPACTA */}
           <div className="border-t border-border/50 pt-2 mt-auto space-y-1.5">
-            {/* Total */}
             <div className="flex justify-between items-center px-1">
               <span className="text-[11px] text-muted-foreground">Total</span>
               <span className="text-lg font-bold text-foreground">
@@ -443,7 +485,6 @@ export default function NuevaVentaPage() {
               </span>
             </div>
 
-            {/* Cliente - SUPER COMPACTO */}
             <div className="space-y-1">
               <div className="flex items-center justify-between px-1">
                 <Label className="text-[9px] text-muted-foreground">
@@ -494,7 +535,6 @@ export default function NuevaVentaPage() {
               )}
             </div>
 
-            {/* Vendedor - SUPER COMPACTO */}
             <div className="space-y-1">
               <Label className="text-[9px] text-muted-foreground px-1">
                 Vendedor
@@ -520,7 +560,6 @@ export default function NuevaVentaPage() {
               </Select>
             </div>
 
-            {/* Forma de Pago - SUPER COMPACTA */}
             <div className="space-y-1">
               <Label className="text-[9px] text-muted-foreground px-1">
                 Forma de Pago
@@ -555,7 +594,6 @@ export default function NuevaVentaPage() {
               </div>
             </div>
 
-            {/* Mixed Payment - COMPACTO */}
             {paymentType === "mixed" && (
               <div className="space-y-1 p-1.5 rounded bg-amber-500/5 border border-amber-500/10">
                 <div className="space-y-0.5">
@@ -580,8 +618,6 @@ export default function NuevaVentaPage() {
               </div>
             )}
 
-            {/* Teléfono - COMPACTO */}
-            {/* Teléfono - COMPACTO */}
             <div className="space-y-1">
               <Label
                 htmlFor="phone-input"
@@ -607,7 +643,6 @@ export default function NuevaVentaPage() {
               />
             </div>
 
-            {/* Botón Procesar - COMPACTO */}
             <Button
               className="w-full h-8 text-xs font-semibold mt-1"
               disabled={!canProcessSale()}
@@ -623,7 +658,6 @@ export default function NuevaVentaPage() {
 
   CartContent.displayName = "CartContent";
 
-  // Sale Complete Screen - Versión compacta
   if (saleComplete) {
     return (
       <MainLayout>
@@ -687,6 +721,37 @@ export default function NuevaVentaPage() {
                   </div>
                 </div>
 
+                {lastInvoice?.afipData && (
+                  <div className="rounded-lg bg-emerald-50/50 border border-emerald-200 p-3 mb-4 space-y-1">
+                    <div className="flex items-center gap-2 mb-2">
+                      <FileText className="h-4 w-4 text-emerald-600" />
+                      <span className="text-xs font-semibold text-emerald-700">
+                        Factura Electrónica AFIP
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-xs">
+                      <span className="text-emerald-600">N°:</span>
+                      <span className="font-mono text-emerald-800">
+                        {lastInvoice.invoiceNumber}
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-xs">
+                      <span className="text-emerald-600">CAE:</span>
+                      <span className="font-mono text-emerald-800 truncate max-w-[120px]">
+                        {lastInvoice.afipData.cae}
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-xs">
+                      <span className="text-emerald-600">Vto:</span>
+                      <span className="text-emerald-800">
+                        {new Date(
+                          lastInvoice.afipData.caeVencimiento,
+                        ).toLocaleDateString("es-AR")}
+                      </span>
+                    </div>
+                  </div>
+                )}
+
                 <div className="space-y-2.5">
                   {!invoiceNumber && !remitoNumber && (
                     <div className="grid grid-cols-2 gap-2">
@@ -715,6 +780,36 @@ export default function NuevaVentaPage() {
                     </div>
                   )}
 
+                  {lastInvoice?.afipData && (
+                    <div className="grid grid-cols-2 gap-2">
+                      <Button
+                        variant="outline"
+                        className="h-9 text-xs gap-1.5"
+                        onClick={() => setShowBoletaModal(true)}
+                      >
+                        <Printer className="h-3.5 w-3.5" />
+                        Ver/Imprimir
+                      </Button>
+                      <Button
+                        variant="outline"
+                        className="h-9 text-xs gap-1.5"
+                        onClick={() => {
+                          if (!lastSaleId) {
+                            toast.error("Error: ID de venta no encontrado");
+                            return;
+                          }
+                          window.open(
+                            `/api/facturacion/pdf/${lastSaleId}`, // ← Cambiar de /facturas/ a /facturacion/
+                            "_blank",
+                          );
+                        }}
+                      >
+                        <Download className="h-3.5 w-3.5" />
+                        Ver PDF
+                      </Button>
+                    </div>
+                  )}
+
                   <Button
                     variant="outline"
                     className="w-full h-9 text-sm"
@@ -734,6 +829,82 @@ export default function NuevaVentaPage() {
               </CardContent>
             </Card>
           </div>
+
+          <Dialog open={showBoletaModal} onOpenChange={setShowBoletaModal}>
+            <DialogContent className="max-w-[100vw] w-full h-[100vh] max-h-[100vh] overflow-hidden p-0 border-0 bg-gray-100">
+              <DialogHeader className="sr-only">
+                <DialogTitle>
+                  Boleta Electrónica {lastInvoice?.invoiceNumber}
+                </DialogTitle>
+                <DialogDescription>
+                  Vista previa de la boleta para imprimir
+                </DialogDescription>
+              </DialogHeader>
+              <div className="flex flex-col h-full">
+                <div className="flex items-center justify-between px-6 py-3 bg-white border-b shadow-sm shrink-0">
+                  <div className="flex items-center gap-2">
+                    <FileText className="h-5 w-5 text-primary" />
+                    <span className="font-semibold">Boleta Electrónica</span>
+                    <span className="text-sm text-muted-foreground ml-2">
+                      {lastInvoice?.invoiceNumber}
+                    </span>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setShowBoletaModal(false)}
+                    >
+                      Cerrar
+                    </Button>
+                    <Button
+                      size="sm"
+                      onClick={handlePrintBoleta}
+                      className="gap-2"
+                    >
+                      <Printer className="h-4 w-4" />
+                      Imprimir
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="flex-1 overflow-auto p-4 md:p-8 flex justify-center items-start bg-gray-200">
+                  {lastInvoice?.afipData && (
+                    <div
+                      className="bg-white shadow-2xl"
+                      style={{ width: "210mm", minHeight: "297mm" }}
+                    >
+                      <BoletaDocument
+                        ref={boletaRef}
+                        boletaNumber={lastInvoice.invoiceNumber}
+                        date={new Date()}
+                        clientName={selectedClientData?.name}
+                        clientCuit={selectedClientData?.cuit}
+                        clientAddress={selectedClientData?.address}
+                        clientPhone={clientPhone || selectedClientData?.phone}
+                        clientTaxCategory={selectedClientData?.taxCategory}
+                        items={cart.map((item) => ({
+                          name: item.product.name,
+                          quantity: item.quantity,
+                          price: item.product.price,
+                        }))}
+                        total={cartTotal}
+                        paymentType={paymentType}
+                        cashAmount={
+                          paymentType === "mixed" ? cashAmount : undefined
+                        }
+                        creditAmount={
+                          paymentType === "mixed" ? creditAmount : undefined
+                        }
+                        cae={lastInvoice.afipData.cae}
+                        caeVencimiento={lastInvoice.afipData.caeVencimiento}
+                      />
+                    </div>
+                  )}
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
 
           <ConfirmDialog
             open={docDialogOpen}
@@ -771,11 +942,8 @@ export default function NuevaVentaPage() {
         </Button>
       </div>
 
-      {/* SOLUCIÓN 2: QUITAR EL CARRITO DE PC Y USAR SOLO EL MODAL EN TODOS LOS DISPOSITIVOS */}
       <div className="space-y-4">
-        {/* Header con búsqueda y botón de carrito para todas las pantallas */}
         <div className="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
-          {/* Título para desktop */}
           <div className="hidden lg:block">
             <h1 className="text-2xl font-bold text-foreground">Nueva Venta</h1>
             <p className="text-sm text-muted-foreground">
@@ -793,7 +961,6 @@ export default function NuevaVentaPage() {
             />
           </div>
 
-          {/* Botón para abrir el modal del carrito - Visible en todos los dispositivos */}
           <Button
             className="gap-2"
             onClick={() => setCartDialogOpen(true)}
@@ -812,7 +979,6 @@ export default function NuevaVentaPage() {
           </Button>
         </div>
 
-        {/* Products Grid - MÁS COMPACTO */}
         {loading ? (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2">
             {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((i) => (
@@ -894,17 +1060,12 @@ export default function NuevaVentaPage() {
         )}
       </div>
 
-      {/* Cart Dialog - SOLUCIÓN 2: Modal para todos los dispositivos */}
-      {/* Cart Dialog - SOLUCIÓN 2: Modal para todos los dispositivos */}
       <Dialog open={cartDialogOpen} onOpenChange={setCartDialogOpen}>
         <DialogContent
           className="max-w-md max-h-[85vh] overflow-y-auto p-0 gap-0 sm:max-w-lg"
           onOpenAutoFocus={(e) => e.preventDefault()}
         >
           <DialogHeader className="px-4 py-3 border-b border-border">
-            <DialogDescription className="sr-only">
-              Revisa y gestiona los productos en tu carrito de compras
-            </DialogDescription>
             <DialogTitle className="flex items-center gap-2 text-base">
               <ShoppingCart className="h-5 w-5 text-primary" />
               Carrito
@@ -914,6 +1075,9 @@ export default function NuevaVentaPage() {
                 </Badge>
               )}
             </DialogTitle>
+            <DialogDescription className="sr-only">
+              Revisa y gestiona los productos en tu carrito de compras
+            </DialogDescription>
           </DialogHeader>
 
           <div className="px-4 py-3">
@@ -922,7 +1086,6 @@ export default function NuevaVentaPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Confirmation Dialog */}
       <ConfirmDialog
         open={confirmDialogOpen}
         onOpenChange={setConfirmDialogOpen}
@@ -939,7 +1102,6 @@ export default function NuevaVentaPage() {
         onConfirm={handleProcessSale}
       />
 
-      {/* New Client Modal */}
       <Dialog open={newClientModalOpen} onOpenChange={setNewClientModalOpen}>
         <DialogContent className="sm:max-w-md max-h-[85vh] overflow-y-auto">
           <DialogHeader>

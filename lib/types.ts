@@ -4,7 +4,6 @@ export interface User {
   id: string
   email: string
   name: string
-  photoURL?: string
   role: UserRole
   sellerId?: string // If role is 'seller', links to Seller record
   isActive: boolean
@@ -25,28 +24,27 @@ export interface Product {
 }
 
 export interface Client {
-  id: string;
-  name: string;
-  dni?: string;
-  cuit: string;
-  email?: string;
-  phone?: string;
-  address?: string;
-  taxCategory: 'responsable_inscripto' | 'monotributo' | 'consumidor_final' | 'exento' | 'no_responsable';
-  creditLimit: number;
-  currentBalance: number;
-  notes?: string;
-  createdAt: number;
+  id: string
+  name: string
+  dni?: string
+  cuit: string
+  email: string
+  phone: string
+  address: string
+  taxCategory: 'responsable_inscripto' | 'monotributo' | 'consumidor_final' | 'exento' | 'no_responsable'
+  creditLimit: number
+  currentBalance: number
+  createdAt: Date
 }
 
 export interface Transaction {
-  id: string;
-  clientId: string;
-  type: 'payment' | 'debt';
-  amount: number;
-  description: string;
-  date: number;
-  createdAt: number;
+  id: string
+  clientId: string
+  type: 'debt' | 'payment'
+  amount: number
+  description: string
+  date: Date
+  saleId?: string
 }
 
 export interface CartItem {
@@ -65,7 +63,7 @@ export interface Sale {
   source?: 'direct' | 'order'
   items: { productId: string; quantity: number; price: number; name: string }[]
   total: number
-  paymentType: 'cash' | 'credit' | 'mixed'
+  paymentType: 'cash' | 'credit'
   status: 'completed' | 'pending'
   invoiceNumber?: string
   remitoNumber?: string

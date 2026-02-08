@@ -31,21 +31,12 @@ import {
   payCommission,
   updateSeller,
 } from '@/services/sellers-service'
+import { getDashboardStats, getDebtors, getLowStockProducts } from '@/services/dashboard-service'
 import { createInvoice, createRemito } from '@/services/invoice-service'
 import { getOrders, updateOrderStatus } from '@/services/orders-service'
 import { doc, updateDoc } from 'firebase/firestore'
 import { firestore } from '@/lib/firebase'
-import {
-  getDashboardStats,
-  getSalesLastDays,
-  getLowStockProducts,
-  getDebtors,
-  getSalesByHourToday,
-  getSalesLastMonths,
-  getTopProducts,
-  getProductDistribution,
-  getDashboardData,
-} from '@/services/dashboard-service'
+
 export const productsApi = {
   async getAll(): Promise<Product[]> {
     return getProducts()
@@ -188,28 +179,10 @@ export const dashboardApi = {
   async getStats() {
     return getDashboardStats()
   },
-  async getSalesLastDays(days = 7) {
-    return getSalesLastDays(days)
-  },
-  async getLowStockProducts() {
+  async getLowStockProducts(): Promise<Product[]> {
     return getLowStockProducts()
   },
-  async getDebtors() {
+  async getDebtors(): Promise<Client[]> {
     return getDebtors()
-  },
-  async getSalesByHourToday() {
-    return getSalesByHourToday()
-  },
-  async getSalesLastMonths(months = 6) {
-    return getSalesLastMonths(months)
-  },
-  async getTopProducts(limit = 5) {
-    return getTopProducts(limit)
-  },
-  async getProductDistribution() {
-    return getProductDistribution()
-  },
-  async getDashboardData() {
-    return getDashboardData()
   },
 }

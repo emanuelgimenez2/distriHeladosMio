@@ -1,3 +1,4 @@
+// services/auth-service.ts
 import {
   GoogleAuthProvider,
   onAuthStateChanged,
@@ -22,8 +23,21 @@ export const signOut = () => firebaseSignOut(firebaseAuth)
 export const onAuthChange = (callback: (user: User | null) => void) =>
   onAuthStateChanged(firebaseAuth, callback)
 
-export const getAuthToken = async () => {
-  const currentUser = firebaseAuth.currentUser
-  if (!currentUser) return null
-  return currentUser.getIdToken()
+export const getAuthToken = async (): Promise<string | null> => {
+  try {
+    const currentUser = firebaseAuth.currentUser
+    console.log("🔍 getAuthToken - Usuario actual:", currentUser?.email || "No autenticado")
+    
+    if (!currentUser) {
+      console.warn("⚠️ getAuthToken: No hay usuario autenticado")
+      return null
+    }
+    
+    const token = await currentUser.getIdToken()
+    console.log("✅ getAuthToken - Token obtenido:", token ? `Sí (${token.substring(0, 20)}...)` : "No")
+    return token
+  } catch (error) {
+    console.error("❌ Error obteniendo token:", error)
+    return null
+  }
 }

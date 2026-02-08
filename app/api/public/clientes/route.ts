@@ -26,8 +26,6 @@ export async function GET(request: Request) {
       address: data.address || '',
       email: data.email || '',
       cuit: data.cuit || dni,
-      taxCategory: data.taxCategory || 'consumidor_final',
-      creditLimit: data.creditLimit || 0,
     },
   })
 }
