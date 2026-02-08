@@ -1,7 +1,8 @@
 'use client'
 
 import { forwardRef } from 'react'
-import { Package, Truck, MapPin, Phone, Calendar, Hash } from 'lucide-react'
+import Image from 'next/image'
+import { Truck, MapPin, Phone, Calendar, User } from 'lucide-react'
 
 interface RemitoItem {
   name: string
@@ -26,7 +27,7 @@ const formatCurrency = (amount: number) => {
   return new Intl.NumberFormat('es-AR', {
     style: 'currency',
     currency: 'ARS',
-    minimumFractionDigits: 2,
+    minimumFractionDigits: 0,
   }).format(amount)
 }
 
@@ -67,160 +68,161 @@ export const RemitoDocument = forwardRef<HTMLDivElement, RemitoDocumentProps>(
         className="bg-white text-black p-8 w-[210mm] min-h-[297mm] mx-auto"
         style={{ fontFamily: 'system-ui, sans-serif' }}
       >
-        {/* Header */}
-        <div className="flex justify-between items-start mb-8 pb-6 border-b-2 border-gray-200">
-          <div>
-            <div className="flex items-center gap-3 mb-2">
-              <div className="h-12 w-12 rounded-xl bg-teal-600 flex items-center justify-center">
-                <Package className="h-6 w-6 text-white" />
+        {/* Header con gradiente */}
+        <div className="relative bg-gradient-to-r from-cyan-500 to-blue-500 rounded-2xl p-6 mb-8 overflow-hidden">
+          <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full -mr-32 -mt-32" />
+          <div className="absolute bottom-0 left-0 w-48 h-48 bg-white/10 rounded-full -ml-24 -mb-24" />
+          
+          <div className="relative flex justify-between items-start">
+            <div className="flex items-center gap-4">
+              <div className="h-16 w-16 bg-white rounded-xl shadow-lg flex items-center justify-center overflow-hidden">
+                <Image 
+                  src="/logo.png" 
+                  alt="Helados Mio" 
+                  width={64} 
+                  height={64}
+                  className="object-contain"
+                />
               </div>
-              <div>
-                <h1 className="text-2xl font-bold text-gray-900">HELADOS MIO</h1>
-                <p className="text-sm text-gray-500">Remito de Entrega</p>
+              <div className="text-white">
+                <h1 className="text-3xl font-bold tracking-tight">Helados Mío</h1>
+                <p className="text-cyan-100 text-sm font-medium mt-1">Distribuidora</p>
               </div>
             </div>
-            <div className="mt-4 text-sm text-gray-600">
-              <p>Av. Principal 1234</p>
-              <p>Buenos Aires, Argentina</p>
-              <p>Tel: (011) 4567-8900</p>
-            </div>
-          </div>
 
-          <div className="text-right">
-            <div className="inline-flex items-center gap-2 bg-teal-50 px-4 py-2 rounded-lg mb-3">
-              <Hash className="h-4 w-4 text-teal-600" />
-              <span className="text-xl font-bold text-teal-600">{remitoNumber}</span>
-            </div>
-            <div className="text-sm text-gray-600 space-y-1">
-              <div className="flex items-center justify-end gap-2">
-                <Calendar className="h-4 w-4" />
-                <span>
-                  {formatDate(date)} - {formatTime(date)}
-                </span>
+            <div className="text-right">
+              <div className="bg-white/20 backdrop-blur-sm px-4 py-2 rounded-xl border border-white/30 mb-3">
+                <p className="text-xs text-cyan-100 font-medium uppercase tracking-wider">Remito</p>
+                <p className="text-2xl font-bold text-white">{remitoNumber}</p>
               </div>
-              <p className="text-xs text-gray-400">Venta: {saleId.slice(0, 8).toUpperCase()}</p>
+              <div className="text-cyan-50 text-sm space-y-1">
+                <div className="flex items-center justify-end gap-2">
+                  <Calendar className="h-4 w-4" />
+                  <span>{formatDate(date)} - {formatTime(date)}</span>
+                </div>
+              </div>
             </div>
           </div>
         </div>
 
-        {/* Client & Delivery Info */}
-        <div className="grid grid-cols-2 gap-6 mb-8">
-          <div className="bg-gray-50 rounded-xl p-5">
-            <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">
-              Datos del Cliente
-            </h3>
-            <p className="font-semibold text-gray-900 text-lg">{clientName || 'Consumidor Final'}</p>
+        {/* Info Cards */}
+        <div className="grid grid-cols-2 gap-4 mb-8">
+          {/* Cliente */}
+          <div className="border-2 border-cyan-200 rounded-xl p-5 bg-gradient-to-br from-cyan-50 to-white">
+            <div className="flex items-center gap-2 mb-3">
+              <div className="h-8 w-8 bg-cyan-500 rounded-lg flex items-center justify-center">
+                <User className="h-4 w-4 text-white" />
+              </div>
+              <h3 className="text-xs font-bold text-cyan-700 uppercase tracking-wider">Cliente</h3>
+            </div>
+            <p className="font-bold text-gray-900 text-lg mb-2">{clientName || 'Consumidor Final'}</p>
             {clientPhone && (
-              <div className="flex items-center gap-2 mt-2 text-sm text-gray-600">
-                <Phone className="h-4 w-4" />
+              <div className="flex items-center gap-2 text-sm text-gray-600">
+                <Phone className="h-4 w-4 text-cyan-500" />
                 <span>{clientPhone}</span>
               </div>
             )}
           </div>
 
-          <div className="bg-gray-50 rounded-xl p-5">
-            <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">
-              Direccion de Entrega
-            </h3>
-            <div className="flex items-start gap-2">
-              <MapPin className="h-4 w-4 text-gray-400 mt-1" />
-              <p className="text-gray-700">{clientAddress || 'Retiro en local'}</p>
+          {/* Entrega */}
+          <div className="border-2 border-blue-200 rounded-xl p-5 bg-gradient-to-br from-blue-50 to-white">
+            <div className="flex items-center gap-2 mb-3">
+              <div className="h-8 w-8 bg-blue-500 rounded-lg flex items-center justify-center">
+                <MapPin className="h-4 w-4 text-white" />
+              </div>
+              <h3 className="text-xs font-bold text-blue-700 uppercase tracking-wider">Entrega</h3>
             </div>
+            <p className="text-gray-700 text-sm mb-2">{clientAddress || 'Retiro en local'}</p>
             {sellerName && (
-              <div className="flex items-center gap-2 mt-3 text-sm text-gray-600">
-                <Truck className="h-4 w-4" />
-                <span>Vendedor: {sellerName}</span>
+              <div className="flex items-center gap-2 text-sm text-gray-600 mt-3 pt-3 border-t border-blue-200">
+                <Truck className="h-4 w-4 text-blue-500" />
+                <span className="font-medium">{sellerName}</span>
               </div>
             )}
           </div>
         </div>
 
-        {/* Items Table */}
+        {/* Tabla de productos */}
         <div className="mb-8">
-          <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-4">
-            Detalle de Productos
-          </h3>
-          <div className="border border-gray-200 rounded-xl overflow-hidden">
+          <div className="flex items-center gap-2 mb-4">
+            <div className="h-1 w-1 bg-cyan-500 rounded-full" />
+            <h3 className="text-sm font-bold text-gray-700 uppercase tracking-wider">Productos</h3>
+            <div className="h-px flex-1 bg-gradient-to-r from-cyan-200 to-transparent" />
+          </div>
+
+          <div className="border-2 border-gray-200 rounded-xl overflow-hidden shadow-sm">
             <table className="w-full">
               <thead>
-                <tr className="bg-gray-50">
-                  <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                    Cant.
-                  </th>
-                  <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                    Producto
-                  </th>
-                  <th className="text-right py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                    Precio Unit.
-                  </th>
-                  <th className="text-right py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                    Subtotal
-                  </th>
+                <tr className="bg-gradient-to-r from-gray-50 to-gray-100">
+                  <th className="text-left py-4 px-5 text-xs font-bold text-gray-600 uppercase tracking-wider w-20">Cant.</th>
+                  <th className="text-left py-4 px-5 text-xs font-bold text-gray-600 uppercase tracking-wider">Descripción</th>
+                  <th className="text-right py-4 px-5 text-xs font-bold text-gray-600 uppercase tracking-wider w-32">P. Unit.</th>
+                  <th className="text-right py-4 px-5 text-xs font-bold text-gray-600 uppercase tracking-wider w-32">Subtotal</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100">
+              <tbody>
                 {items.map((item, index) => (
-                  <tr key={index}>
-                    <td className="py-4 px-4">
-                      <span className="inline-flex items-center justify-center h-8 w-8 rounded-full bg-teal-100 text-teal-700 font-semibold text-sm">
+                  <tr key={index} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                    <td className="py-4 px-5">
+                      <div className="inline-flex items-center justify-center h-10 w-10 rounded-lg bg-gradient-to-br from-cyan-500 to-blue-500 text-white font-bold text-sm shadow-sm">
                         {item.quantity}
-                      </span>
+                      </div>
                     </td>
-                    <td className="py-4 px-4">
-                      <p className="font-medium text-gray-900">{item.name}</p>
+                    <td className="py-4 px-5">
+                      <p className="font-semibold text-gray-900">{item.name}</p>
                     </td>
-                    <td className="py-4 px-4 text-right text-gray-600">{formatCurrency(item.price)}</td>
-                    <td className="py-4 px-4 text-right font-medium text-gray-900">
+                    <td className="py-4 px-5 text-right text-gray-600 font-medium">
+                      {formatCurrency(item.price)}
+                    </td>
+                    <td className="py-4 px-5 text-right font-bold text-gray-900">
                       {formatCurrency(item.price * item.quantity)}
                     </td>
                   </tr>
                 ))}
               </tbody>
-              <tfoot>
-                <tr className="bg-gray-50">
-                  <td colSpan={3} className="py-4 px-4 text-right font-semibold text-gray-700">
-                    TOTAL
-                  </td>
-                  <td className="py-4 px-4 text-right">
-                    <span className="text-xl font-bold text-teal-600">{formatCurrency(total)}</span>
-                  </td>
-                </tr>
-              </tfoot>
             </table>
+
+            {/* Total */}
+            <div className="bg-gradient-to-r from-cyan-500 to-blue-500 px-5 py-5">
+              <div className="flex justify-between items-center">
+                <span className="text-white font-bold text-lg uppercase tracking-wide">Total</span>
+                <span className="text-3xl font-bold text-white">{formatCurrency(total)}</span>
+              </div>
+            </div>
           </div>
         </div>
 
-        {/* Notes Section */}
+        {/* Observaciones */}
         {notes && (
-          <div className="bg-amber-50 border border-amber-200 rounded-xl p-5 mb-8">
-            <h3 className="text-xs font-semibold text-amber-700 uppercase tracking-wider mb-2">
+          <div className="border-2 border-amber-300 bg-gradient-to-br from-amber-50 to-yellow-50 rounded-xl p-5 mb-8">
+            <h3 className="text-xs font-bold text-amber-700 uppercase tracking-wider mb-2 flex items-center gap-2">
+              <div className="h-2 w-2 bg-amber-500 rounded-full" />
               Observaciones
             </h3>
-            <p className="text-amber-800">{notes}</p>
+            <p className="text-amber-900 font-medium">{notes}</p>
           </div>
         )}
 
-        {/* Signatures */}
-        <div className="grid grid-cols-2 gap-8 mt-12">
+        {/* Firmas */}
+        <div className="grid grid-cols-2 gap-8 mt-16 mb-8">
           <div className="text-center">
-            <div className="border-t-2 border-gray-300 pt-3">
-              <p className="text-sm text-gray-600">Firma del Remitente</p>
-              <p className="text-xs text-gray-400 mt-1">HELADOS MIO</p>
-            </div>
+            <div className="h-20 border-b-2 border-gray-300 mb-3" />
+            <p className="font-semibold text-gray-700">Firma del Remitente</p>
+            <p className="text-xs text-gray-500 mt-1">Helados Mío</p>
           </div>
           <div className="text-center">
-            <div className="border-t-2 border-gray-300 pt-3">
-              <p className="text-sm text-gray-600">Firma del Receptor</p>
-              <p className="text-xs text-gray-400 mt-1">Aclaracion y DNI</p>
-            </div>
+            <div className="h-20 border-b-2 border-gray-300 mb-3" />
+            <p className="font-semibold text-gray-700">Firma y Aclaración</p>
+            <p className="text-xs text-gray-500 mt-1">Receptor - DNI</p>
           </div>
         </div>
 
         {/* Footer */}
-        <div className="mt-12 pt-6 border-t border-gray-200 text-center text-xs text-gray-400">
-          <p>Este remito no es valido como factura</p>
-          <p className="mt-1">
-            Documento generado el {formatDate(new Date())} a las {formatTime(new Date())}
+        <div className="border-t-2 border-gray-200 pt-6 text-center">
+          <p className="text-xs text-gray-500 mb-1">Este documento no es válido como factura fiscal</p>
+          <p className="text-xs text-gray-400">ID Venta: {saleId.toUpperCase()}</p>
+          <p className="text-xs text-gray-400 mt-2">
+            Generado: {formatDate(new Date())} {formatTime(new Date())}
           </p>
         </div>
       </div>

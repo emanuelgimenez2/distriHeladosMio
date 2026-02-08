@@ -1,5 +1,4 @@
-// app/ventas/nueva/page.tsx - CORREGIDO
-
+// app/ventas/nueva/page.tsx - CORREGIDO COMPLETO
 "use client";
 
 import { useEffect, useState, memo, useRef } from "react";
@@ -18,7 +17,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogDescription, // AGREGADO
+  DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
 import {
@@ -32,7 +31,6 @@ import {
   productsApi,
   clientsApi,
   salesApi,
-  remitoApi,
   sellersApi,
 } from "@/lib/api";
 import type { Product, Client, CartItem, Seller } from "@/lib/types";
@@ -54,12 +52,10 @@ import {
   Sparkles,
   Package,
   X,
-  Printer,
-  Download,
+  Eye,
 } from "lucide-react";
 import { toast } from "sonner";
-import { useAfipInvoice } from "@/hooks/use-afip-invoice";
-import { BoletaDocument } from "@/components/documentos/boleta-document";
+import Link from "next/link";
 
 export default function NuevaVentaPage() {
   const router = useRouter();
@@ -79,13 +75,6 @@ export default function NuevaVentaPage() {
   const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
   const [processing, setProcessing] = useState(false);
   const [saleComplete, setSaleComplete] = useState(false);
-  const [invoiceNumber, setInvoiceNumber] = useState("");
-  const [invoicePdfUrl, setInvoicePdfUrl] = useState("");
-  const [remitoNumber, setRemitoNumber] = useState("");
-  const [remitoPdfUrl, setRemitoPdfUrl] = useState("");
-  const [docDialogOpen, setDocDialogOpen] = useState(false);
-  const [docType, setDocType] = useState<"invoice" | "remito">("invoice");
-  const [generatingDoc, setGeneratingDoc] = useState(false);
   const [lastSaleId, setLastSaleId] = useState<string>("");
   const [cartDialogOpen, setCartDialogOpen] = useState(false);
 
@@ -102,20 +91,6 @@ export default function NuevaVentaPage() {
   useEffect(() => {
     loadData();
   }, []);
-
-  const [showBoletaModal, setShowBoletaModal] = useState(false);
-  const boletaRef = useRef<HTMLDivElement>(null);
-
-  const {
-    emitirFactura,
-    isLoading: isEmittingInvoice,
-    lastInvoice,
-  } = useAfipInvoice({
-    onSuccess: (data) => {
-      setInvoiceNumber(data.invoiceNumber);
-      setInvoicePdfUrl(data.pdfUrl);
-    },
-  });
 
   const loadData = async () => {
     try {
@@ -189,42 +164,6 @@ export default function NuevaVentaPage() {
 
   const selectedClientData = clients.find((c) => c.id === selectedClient);
   const selectedSellerData = sellers.find((s) => s.id === selectedSeller);
-
-  const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setClientPhone(e.target.value);
-  };
-
-  const handlePrintBoleta = () => {
-    const printWindow = window.open("", "_blank");
-    if (!printWindow) return;
-
-    const boletaHTML = boletaRef.current?.outerHTML;
-    printWindow.document.write(`
-    <html>
-      <head>
-        <title>Boleta ${lastInvoice?.invoiceNumber || ""}</title>
-        <style>
-          @media print {
-            body { margin: 0; }
-            .no-print { display: none; }
-          }
-        </style>
-      </head>
-      <body>
-        ${boletaHTML}
-        <script>
-          window.onload = () => {
-            setTimeout(() => {
-              window.print();
-              window.close();
-            }, 100);
-          };
-        </script>
-      </body>
-    </html>
-  `);
-    printWindow.document.close();
-  };
 
   useEffect(() => {
     if (paymentType === "cash") {
@@ -309,60 +248,8 @@ export default function NuevaVentaPage() {
     setCashAmount(0);
     setClientPhone("");
     setSaleComplete(false);
-    setInvoiceNumber("");
-    setInvoicePdfUrl("");
-    setRemitoNumber("");
-    setRemitoPdfUrl("");
-    setDocDialogOpen(false);
-    setGeneratingDoc(false);
     setLastSaleId("");
     loadData();
-  };
-
-  const handleGenerateInvoice = async () => {
-    if (!lastSaleId) return;
-    setGeneratingDoc(true);
-    try {
-      const result = await emitirFactura(lastSaleId, {
-        name: selectedClientData?.name,
-        phone: clientPhone || selectedClientData?.phone,
-        email: selectedClientData?.email,
-        taxCategory: selectedClientData?.taxCategory, // IMPORTANTE: Campo obligatorio
-        cuit: selectedClientData?.cuit,
-      });
-
-      setInvoiceNumber(result.invoiceNumber);
-      setInvoicePdfUrl(result.pdfUrl);
-
-      toast.success(
-        result.mock
-          ? "Boleta generada (modo prueba)"
-          : `Factura ${result.invoiceNumber} emitida en AFIP`,
-      );
-    } catch (error) {
-      console.error("Error generating invoice:", error);
-      toast.error("Error al generar la boleta");
-    } finally {
-      setGeneratingDoc(false);
-      setDocDialogOpen(false);
-    }
-  };
-
-  const handleGenerateRemito = async () => {
-    if (!lastSaleId) return;
-    setGeneratingDoc(true);
-    try {
-      const remito = await remitoApi.createRemito(lastSaleId);
-      setRemitoNumber(remito.remitoNumber);
-      setRemitoPdfUrl(remito.pdfUrl);
-      toast.success("Remito generado correctamente");
-    } catch (error) {
-      console.error("Error generating remito:", error);
-      toast.error("Error al generar el remito");
-    } finally {
-      setGeneratingDoc(false);
-      setDocDialogOpen(false);
-    }
   };
 
   const handleCreateNewClient = async () => {
@@ -721,101 +608,40 @@ export default function NuevaVentaPage() {
                   </div>
                 </div>
 
-                {lastInvoice?.afipData && (
-                  <div className="rounded-lg bg-emerald-50/50 border border-emerald-200 p-3 mb-4 space-y-1">
-                    <div className="flex items-center gap-2 mb-2">
-                      <FileText className="h-4 w-4 text-emerald-600" />
-                      <span className="text-xs font-semibold text-emerald-700">
-                        Factura Electrónica AFIP
-                      </span>
-                    </div>
-                    <div className="flex justify-between text-xs">
-                      <span className="text-emerald-600">N°:</span>
-                      <span className="font-mono text-emerald-800">
-                        {lastInvoice.invoiceNumber}
-                      </span>
-                    </div>
-                    <div className="flex justify-between text-xs">
-                      <span className="text-emerald-600">CAE:</span>
-                      <span className="font-mono text-emerald-800 truncate max-w-[120px]">
-                        {lastInvoice.afipData.cae}
-                      </span>
-                    </div>
-                    <div className="flex justify-between text-xs">
-                      <span className="text-emerald-600">Vto:</span>
-                      <span className="text-emerald-800">
-                        {new Date(
-                          lastInvoice.afipData.caeVencimiento,
-                        ).toLocaleDateString("es-AR")}
-                      </span>
-                    </div>
-                  </div>
-                )}
-
                 <div className="space-y-2.5">
-                  {!invoiceNumber && !remitoNumber && (
-                    <div className="grid grid-cols-2 gap-2">
-                      <Button
-                        variant="outline"
-                        className="h-9 text-xs gap-1.5"
-                        onClick={() => {
-                          setDocType("invoice");
-                          setDocDialogOpen(true);
-                        }}
-                      >
-                        <FileText className="h-3.5 w-3.5" />
-                        Boleta
-                      </Button>
-                      <Button
-                        variant="outline"
-                        className="h-9 text-xs gap-1.5"
-                        onClick={() => {
-                          setDocType("remito");
-                          setDocDialogOpen(true);
-                        }}
-                      >
-                        <Receipt className="h-3.5 w-3.5" />
-                        Remito
-                      </Button>
-                    </div>
-                  )}
-
-                  {lastInvoice?.afipData && (
-                    <div className="grid grid-cols-2 gap-2">
-                      <Button
-                        variant="outline"
-                        className="h-9 text-xs gap-1.5"
-                        onClick={() => setShowBoletaModal(true)}
-                      >
-                        <Printer className="h-3.5 w-3.5" />
-                        Ver/Imprimir
-                      </Button>
-                      <Button
-                        variant="outline"
-                        className="h-9 text-xs gap-1.5"
-                        onClick={() => {
-                          if (!lastSaleId) {
-                            toast.error("Error: ID de venta no encontrado");
-                            return;
-                          }
-                          window.open(
-                            `/api/facturacion/pdf/${lastSaleId}`, // ← Cambiar de /facturas/ a /facturacion/
-                            "_blank",
-                          );
-                        }}
-                      >
-                        <Download className="h-3.5 w-3.5" />
-                        Ver PDF
-                      </Button>
-                    </div>
-                  )}
+                  {/* Botones que redirigen a la página de ventas con el ID de la venta */}
+                  <div className="grid grid-cols-2 gap-2">
+                    <Button
+                      variant="outline"
+                      className="h-9 text-xs gap-1.5"
+                      onClick={() => {
+                        // Redirige a la página de ventas con el ID para que el usuario pueda generar la boleta desde allí
+                        router.push(`/ventas?saleId=${lastSaleId}`);
+                      }}
+                    >
+                      <FileText className="h-3.5 w-3.5" />
+                      Ir a Boleta
+                    </Button>
+                    <Button
+                      variant="outline"
+                      className="h-9 text-xs gap-1.5"
+                      onClick={() => {
+                        // Redirige a la página de ventas con el ID para que el usuario pueda generar el remito desde allí
+                        router.push(`/ventas?saleId=${lastSaleId}`);
+                      }}
+                    >
+                      <Receipt className="h-3.5 w-3.5" />
+                      Ir a Remito
+                    </Button>
+                  </div>
 
                   <Button
                     variant="outline"
-                    className="w-full h-9 text-sm"
+                    className="w-full h-9 text-sm gap-2"
                     onClick={() => router.push("/ventas")}
                   >
-                    Ver Ventas
+                    <Eye className="h-3.5 w-3.5" />
+                    Ver Todas las Ventas
                   </Button>
 
                   <Button
@@ -829,100 +655,6 @@ export default function NuevaVentaPage() {
               </CardContent>
             </Card>
           </div>
-
-          <Dialog open={showBoletaModal} onOpenChange={setShowBoletaModal}>
-            <DialogContent className="max-w-[100vw] w-full h-[100vh] max-h-[100vh] overflow-hidden p-0 border-0 bg-gray-100">
-              <DialogHeader className="sr-only">
-                <DialogTitle>
-                  Boleta Electrónica {lastInvoice?.invoiceNumber}
-                </DialogTitle>
-                <DialogDescription>
-                  Vista previa de la boleta para imprimir
-                </DialogDescription>
-              </DialogHeader>
-              <div className="flex flex-col h-full">
-                <div className="flex items-center justify-between px-6 py-3 bg-white border-b shadow-sm shrink-0">
-                  <div className="flex items-center gap-2">
-                    <FileText className="h-5 w-5 text-primary" />
-                    <span className="font-semibold">Boleta Electrónica</span>
-                    <span className="text-sm text-muted-foreground ml-2">
-                      {lastInvoice?.invoiceNumber}
-                    </span>
-                  </div>
-                  <div className="flex gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setShowBoletaModal(false)}
-                    >
-                      Cerrar
-                    </Button>
-                    <Button
-                      size="sm"
-                      onClick={handlePrintBoleta}
-                      className="gap-2"
-                    >
-                      <Printer className="h-4 w-4" />
-                      Imprimir
-                    </Button>
-                  </div>
-                </div>
-
-                <div className="flex-1 overflow-auto p-4 md:p-8 flex justify-center items-start bg-gray-200">
-                  {lastInvoice?.afipData && (
-                    <div
-                      className="bg-white shadow-2xl"
-                      style={{ width: "210mm", minHeight: "297mm" }}
-                    >
-                      <BoletaDocument
-                        ref={boletaRef}
-                        boletaNumber={lastInvoice.invoiceNumber}
-                        date={new Date()}
-                        clientName={selectedClientData?.name}
-                        clientCuit={selectedClientData?.cuit}
-                        clientAddress={selectedClientData?.address}
-                        clientPhone={clientPhone || selectedClientData?.phone}
-                        clientTaxCategory={selectedClientData?.taxCategory}
-                        items={cart.map((item) => ({
-                          name: item.product.name,
-                          quantity: item.quantity,
-                          price: item.product.price,
-                        }))}
-                        total={cartTotal}
-                        paymentType={paymentType}
-                        cashAmount={
-                          paymentType === "mixed" ? cashAmount : undefined
-                        }
-                        creditAmount={
-                          paymentType === "mixed" ? creditAmount : undefined
-                        }
-                        cae={lastInvoice.afipData.cae}
-                        caeVencimiento={lastInvoice.afipData.caeVencimiento}
-                      />
-                    </div>
-                  )}
-                </div>
-              </div>
-            </DialogContent>
-          </Dialog>
-
-          <ConfirmDialog
-            open={docDialogOpen}
-            onOpenChange={setDocDialogOpen}
-            title={docType === "invoice" ? "Generar Boleta" : "Generar Remito"}
-            description={
-              docType === "invoice"
-                ? "Se generará la boleta fiscal para esta venta."
-                : "Se generará un remito de entrega para esta venta."
-            }
-            confirmText={generatingDoc ? "Generando..." : "Generar"}
-            confirmDisabled={generatingDoc}
-            onConfirm={
-              docType === "invoice"
-                ? handleGenerateInvoice
-                : handleGenerateRemito
-            }
-          />
         </div>
       </MainLayout>
     );
