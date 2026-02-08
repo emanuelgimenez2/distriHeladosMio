@@ -29,128 +29,149 @@ const buildRemitoPdf = async (data: {
   const { height, width } = page.getSize()
   
   const c = {
-    primary: rgb(0.26, 0.52, 0.96),
-    primaryLight: rgb(0.85, 0.90, 0.98),
-    accent: rgb(1, 0.35, 0.55),
-    accentLight: rgb(1, 0.93, 0.95),
-    success: rgb(0.20, 0.78, 0.55),
-    dark: rgb(0.13, 0.13, 0.18),
-    darkMuted: rgb(0.35, 0.35, 0.42),
-    gray: rgb(0.52, 0.52, 0.58),
-    grayLight: rgb(0.75, 0.75, 0.78),
-    bgGray: rgb(0.97, 0.97, 0.98),
+    black: rgb(0.067, 0.067, 0.067),
+    gray: rgb(0.902, 0.914, 0.922),
+    midGray: rgb(0.467, 0.467, 0.467),
+    celeste: rgb(0.847, 0.929, 0.969),
+    zebra: rgb(0.969, 0.973, 0.976),
     white: rgb(1, 1, 1),
   }
 
-  let y = height - 40
+  const margin = 45.35
 
-  // ===== HEADER PREMIUM =====
-  
+  // Marco doble exterior
   page.drawRectangle({
-    x: 0,
-    y: height - 200,
-    width: width,
-    height: 200,
-    color: c.white,
-  })
-
-  // Gradiente visual con rectángulos superpuestos
-  page.drawRectangle({
-    x: 0,
-    y: height - 6,
-    width: width,
-    height: 6,
-    color: c.primary,
+    x: 8,
+    y: 8,
+    width: width - 16,
+    height: height - 16,
+    borderColor: c.black,
+    borderWidth: 1.5,
   })
   
   page.drawRectangle({
-    x: 0,
-    y: height - 8,
-    width: width * 0.65,
-    height: 2,
-    color: c.accent,
+    x: 14,
+    y: 14,
+    width: width - 28,
+    height: height - 28,
+    borderColor: c.gray,
+    borderWidth: 1,
   })
 
-  // Logo icono minimalista
-  const logoSize = 52
-  const logoX = 45
-  const logoY = height - 90
-  
-  page.drawRectangle({
-    x: logoX,
-    y: logoY,
-    width: logoSize,
-    height: logoSize,
-    color: c.primary,
-  })
-  
-  page.drawRectangle({
-    x: logoX + 4,
-    y: logoY + 4,
-    width: logoSize - 8,
-    height: logoSize - 8,
-    color: c.primaryLight,
-  })
-  
-  page.drawText('H', {
-    x: logoX + 16,
-    y: logoY + 16,
-    size: 32,
-    font: fontBold,
-    color: c.primary,
-  })
+  let y = height - 70
 
-  // Branding
-  page.drawText('Helados Mio', {
-    x: logoX + logoSize + 18,
-    y: logoY + 30,
-    size: 26,
-    font: fontBold,
-    color: c.dark,
+  // REMITO centrado
+  const remitoText = 'REMITO'
+  const remitoWidth = fontBold.widthOfTextAtSize(remitoText, 48)
+  
+  page.drawLine({
+    start: { x: (width - remitoWidth) / 2 - 100, y: y + 10 },
+    end: { x: (width - remitoWidth) / 2 - 20, y: y + 10 },
+    thickness: 0.8,
+    color: c.gray,
   })
   
-  page.drawText('DISTRIBUIDORA ARTESANAL PREMIUM', {
-    x: logoX + logoSize + 18,
-    y: logoY + 12,
-    size: 9,
-    font: font,
+  page.drawLine({
+    start: { x: (width + remitoWidth) / 2 + 20, y: y + 10 },
+    end: { x: (width + remitoWidth) / 2 + 100, y: y + 10 },
+    thickness: 0.8,
     color: c.gray,
   })
 
-  // Badge remito premium
-  const badgeX = width - 190
-  const badgeY = height - 120
-  
-  page.drawRectangle({
-    x: badgeX,
-    y: badgeY,
-    width: 160,
-    height: 90,
-    color: c.bgGray,
-  })
-  
-  page.drawRectangle({
-    x: badgeX,
-    y: badgeY + 50,
-    width: 160,
-    height: 40,
-    color: c.primary,
+  page.drawText(remitoText, {
+    x: (width - remitoWidth) / 2,
+    y: y - 5,
+    size: 48,
+    font: fontBold,
+    color: c.black,
   })
 
-  page.drawText('REMITO', {
-    x: badgeX + 50,
-    y: badgeY + 67,
-    size: 11,
-    font: fontBold,
+  page.drawLine({
+    start: { x: margin + 40, y: y - 25 },
+    end: { x: width - margin - 40, y: y - 25 },
+    thickness: 1,
+    color: c.gray,
+  })
+
+  y -= 90
+
+  // Logo y branding izquierda
+  const logoSize = 60
+  const logoX = margin + 20
+  const logoY = y - 10
+  
+  page.drawRectangle({
+    x: logoX,
+    y: logoY - logoSize,
+    width: logoSize,
+    height: logoSize,
+    borderColor: c.celeste,
+    borderWidth: 2,
     color: c.white,
   })
   
-  page.drawText(data.remitoNumber, {
-    x: badgeX + 18,
-    y: badgeY + 26,
-    size: 16,
+  page.drawText('H', {
+    x: logoX + 18,
+    y: logoY - 42,
+    size: 36,
     font: fontBold,
-    color: c.dark,
+    color: c.black,
+  })
+
+  page.drawText('Helados Mio', {
+    x: logoX + logoSize + 20,
+    y: logoY - 30,
+    size: 28,
+    font: fontBold,
+    color: c.black,
+  })
+  
+  page.drawText('DISTRIBUIDORA ARTESANAL PREMIUM', {
+    x: logoX + logoSize + 20,
+    y: logoY - 50,
+    size: 8,
+    font: font,
+    color: c.midGray,
+  })
+
+  // Tarjeta N° REMITO derecha
+  const cardX = width - margin - 240
+  const cardY = logoY - 60
+  const cardW = 220
+  const cardH = 90
+  
+  page.drawRectangle({
+    x: cardX,
+    y: cardY,
+    width: cardW,
+    height: cardH,
+    color: c.white,
+    borderColor: c.gray,
+    borderWidth: 1,
+  })
+  
+  page.drawRectangle({
+    x: cardX,
+    y: cardY + cardH - 35,
+    width: cardW,
+    height: 35,
+    color: c.celeste,
+  })
+
+  page.drawText('N° REMITO', {
+    x: cardX + 70,
+    y: cardY + cardH - 22,
+    size: 9,
+    font: fontBold,
+    color: c.black,
+  })
+  
+  page.drawText(data.remitoNumber, {
+    x: cardX + 30,
+    y: cardY + 38,
+    size: 20,
+    font: fontBold,
+    color: c.black,
   })
 
   const dateStr = data.createdAt.toLocaleDateString('es-AR', {
@@ -163,415 +184,317 @@ const buildRemitoPdf = async (data: {
     minute: '2-digit' 
   })
   
-  page.drawText(`${dateStr} · ${timeStr}`, {
-    x: badgeX + 18,
-    y: badgeY + 8,
+  page.drawText(`${dateStr} - ${timeStr}`, {
+    x: cardX + 35,
+    y: cardY + 15,
     size: 9,
     font: font,
-    color: c.gray,
-  })
-
-  y = height - 230
-
-  // ===== INFORMACIÓN CLIENTE/ENTREGA MODERNA =====
-  
-  const cardH = 95
-  const cardW = (width - 110) / 2
-  const cardY = y - cardH
-  const gap = 10
-
-  // Card Cliente
-  page.drawRectangle({
-    x: 45,
-    y: cardY,
-    width: cardW,
-    height: cardH,
-    color: c.white,
-    borderColor: rgb(0.88, 0.88, 0.92),
-    borderWidth: 1.5,
-  })
-  
-  page.drawRectangle({
-    x: 45,
-    y: cardY + cardH - 32,
-    width: cardW,
-    height: 32,
-    color: c.primaryLight,
-  })
-  
-  page.drawCircle({
-    x: 60,
-    y: cardY + cardH - 16,
-    size: 5,
-    color: c.primary,
-  })
-
-  page.drawText('INFORMACIÓN DEL CLIENTE', {
-    x: 70,
-    y: cardY + cardH - 20,
-    size: 8.5,
-    font: fontBold,
-    color: c.primary,
-  })
-  
-  page.drawText(data.clientName || 'Consumidor Final', {
-    x: 60,
-    y: cardY + 50,
-    size: 13,
-    font: fontBold,
-    color: c.dark,
-    maxWidth: cardW - 30,
-  })
-  
-  if (data.clientPhone) {
-    page.drawText(`Tel: ${data.clientPhone}`, {
-      x: 60,
-      y: cardY + 32,
-      size: 9.5,
-      font: font,
-      color: c.gray,
-    })
-  }
-  
-  if (data.clientAddress) {
-    page.drawText(data.clientAddress, {
-      x: 60,
-      y: cardY + 16,
-      size: 9,
-      font: font,
-      color: c.darkMuted,
-      maxWidth: cardW - 30,
-    })
-  }
-
-  // Card Entrega
-  const card2X = 55 + cardW
-  page.drawRectangle({
-    x: card2X,
-    y: cardY,
-    width: cardW,
-    height: cardH,
-    color: c.white,
-    borderColor: rgb(0.88, 0.88, 0.92),
-    borderWidth: 1.5,
-  })
-  
-  page.drawRectangle({
-    x: card2X,
-    y: cardY + cardH - 32,
-    width: cardW,
-    height: 32,
-    color: c.accentLight,
-  })
-  
-  page.drawCircle({
-    x: card2X + 15,
-    y: cardY + cardH - 16,
-    size: 5,
-    color: c.accent,
-  })
-
-  page.drawText('DATOS DE ENTREGA', {
-    x: card2X + 25,
-    y: cardY + cardH - 20,
-    size: 8.5,
-    font: fontBold,
-    color: c.accent,
-  })
-  
-  page.drawText(data.clientAddress || 'Retiro en local', {
-    x: card2X + 15,
-    y: cardY + 50,
-    size: 12,
-    font: fontBold,
-    color: c.dark,
-    maxWidth: cardW - 30,
-  })
-  
-  if (data.sellerName) {
-    page.drawText(`Vendedor: ${data.sellerName}`, {
-      x: card2X + 15,
-      y: cardY + 32,
-      size: 9.5,
-      font: font,
-      color: c.gray,
-    })
-  }
-  
-  page.drawText(`ID: ${data.saleId.slice(0, 18)}...`, {
-    x: card2X + 15,
-    y: cardY + 16,
-    size: 8,
-    font: font,
-    color: c.grayLight,
+    color: c.midGray,
   })
 
   y = cardY - 50
 
-  // ===== TABLA PRODUCTOS ULTRA PREMIUM =====
+  // Cards cliente y entrega
+  const cardClientW = (width - 2 * margin - 20) / 2
+  const cardClientH = 100
+  const cardClientY = y - cardClientH
+
+  // Card Cliente
+  page.drawRectangle({
+    x: margin,
+    y: cardClientY,
+    width: cardClientW,
+    height: cardClientH,
+    color: c.white,
+    borderColor: c.gray,
+    borderWidth: 1,
+  })
   
-  page.drawText('Detalle de Productos', {
-    x: 45,
+  page.drawRectangle({
+    x: margin,
+    y: cardClientY + cardClientH - 35,
+    width: cardClientW,
+    height: 35,
+    color: c.celeste,
+  })
+  
+  page.drawCircle({
+    x: margin + 15,
+    y: cardClientY + cardClientH - 17,
+    size: 4,
+    color: c.black,
+  })
+
+  page.drawText('INFORMACIÓN DEL CLIENTE', {
+    x: margin + 28,
+    y: cardClientY + cardClientH - 22,
+    size: 9,
+    font: fontBold,
+    color: c.black,
+  })
+  
+  page.drawText(data.clientName || 'kiosko pedro', {
+    x: margin + 15,
+    y: cardClientY + 45,
+    size: 14,
+    font: fontBold,
+    color: c.black,
+  })
+  
+  page.drawText('Opcional (6ormén: Opcional)', {
+    x: margin + 15,
+    y: cardClientY + 20,
+    size: 9,
+    font: font,
+    color: c.midGray,
+  })
+
+  // Card Entrega
+  const card2X = margin + cardClientW + 20
+  page.drawRectangle({
+    x: card2X,
+    y: cardClientY,
+    width: cardClientW,
+    height: cardClientH,
+    color: c.white,
+    borderColor: c.gray,
+    borderWidth: 1,
+  })
+  
+  page.drawRectangle({
+    x: card2X,
+    y: cardClientY + cardClientH - 35,
+    width: cardClientW,
+    height: 35,
+    color: c.celeste,
+  })
+  
+  page.drawCircle({
+    x: card2X + 15,
+    y: cardClientY + cardClientH - 17,
+    size: 4,
+    color: c.black,
+  })
+
+  page.drawText('DATOS DE ENTREGA', {
+    x: card2X + 28,
+    y: cardClientY + cardClientH - 22,
+    size: 9,
+    font: fontBold,
+    color: c.black,
+  })
+  
+  page.drawText(data.clientAddress || 'Retiro en local', {
+    x: card2X + 15,
+    y: cardClientY + 45,
+    size: 13,
+    font: fontBold,
+    color: c.black,
+  })
+  
+  page.drawText(`ID: ${data.saleId.slice(0, 18)}...`, {
+    x: card2X + 15,
+    y: cardClientY + 20,
+    size: 8,
+    font: font,
+    color: c.midGray,
+  })
+
+  y = cardClientY - 50
+
+  // DETALLE DE PRODUCTOS
+  page.drawText('DETALLE DE PRODUCTOS', {
+    x: margin,
     y: y,
     size: 15,
     font: fontBold,
-    color: c.dark,
+    color: c.black,
   })
   
-  page.drawRectangle({
-    x: 45,
-    y: y - 6,
-    width: 80,
-    height: 3,
-    color: c.primary,
+  page.drawLine({
+    start: { x: margin, y: y - 8 },
+    end: { x: width - margin, y: y - 8 },
+    thickness: 1,
+    color: c.gray,
   })
 
-  y -= 40
+  y -= 50
 
-  // Header tabla con estilo glassmorphism
+  // Header tabla
   const thY = y
+  const tableWidth = width - 2 * margin
+  
   page.drawRectangle({
-    x: 45,
+    x: margin,
     y: thY - 8,
-    width: width - 90,
+    width: tableWidth,
     height: 34,
-    color: c.dark,
+    color: c.black,
   })
 
   const col = {
-    qty: 70,
-    prod: 130,
-    unit: width - 210,
-    sub: width - 115,
+    cant: margin + 50,
+    producto: margin + 135,
+    precioUnit: width - margin - 170,
+    subtotal: width - margin - 70,
   }
 
   page.drawText('CANT', { 
-    x: col.qty, 
-    y: thY + 1, 
-    size: 9, 
+    x: col.cant - 15, 
+    y: thY + 2, 
+    size: 10, 
     font: fontBold, 
     color: c.white,
   })
   page.drawText('PRODUCTO', { 
-    x: col.prod, 
-    y: thY + 1, 
-    size: 9, 
+    x: col.producto, 
+    y: thY + 2, 
+    size: 10, 
     font: fontBold, 
     color: c.white,
   })
-  page.drawText('P. UNIT', { 
-    x: col.unit, 
-    y: thY + 1, 
-    size: 9, 
+  page.drawText('PRECIO UNITARIO', { 
+    x: col.precioUnit - 50, 
+    y: thY + 2, 
+    size: 10, 
     font: fontBold, 
     color: c.white,
   })
   page.drawText('SUBTOTAL', { 
-    x: col.sub, 
-    y: thY + 1, 
-    size: 9, 
+    x: col.subtotal - 30, 
+    y: thY + 2, 
+    size: 10, 
     font: fontBold, 
     color: c.white,
   })
 
-  y -= 45
+  y -= 50
 
-  // Items con diseño premium
+  // Items
   let alt = false
   for (const item of data.items) {
-    const rh = 32
+    const rh = 38
     
     if (alt) {
       page.drawRectangle({
-        x: 48,
+        x: margin + 2,
         y: y - 5,
-        width: width - 96,
+        width: tableWidth - 4,
         height: rh,
-        color: c.bgGray,
+        color: c.zebra,
       })
     }
 
-    // Badge cantidad minimalista
+    // Badge cantidad
     page.drawRectangle({
-      x: col.qty - 2,
-      y: y + 1,
+      x: col.cant - 20,
+      y: y + 3,
       width: 32,
-      height: 20,
-      color: c.primary,
+      height: 24,
+      color: c.celeste,
     })
     
     const qtyStr = String(item.quantity)
-    const qtyOffset = qtyStr.length > 1 ? 8 : 11
+    const qtyWidth = fontBold.widthOfTextAtSize(qtyStr, 11)
     page.drawText(qtyStr, {
-      x: col.qty + qtyOffset,
-      y: y + 6,
-      size: 10,
+      x: col.cant - 4 - qtyWidth / 2,
+      y: y + 9,
+      size: 11,
       font: fontBold,
-      color: c.white,
+      color: c.black,
     })
 
     page.drawText(item.name, { 
-      x: col.prod, 
-      y: y + 5, 
-      size: 10.5, 
+      x: col.producto, 
+      y: y + 8, 
+      size: 11, 
       font: fontBold, 
-      color: c.dark,
-      maxWidth: col.unit - col.prod - 20,
+      color: c.black,
     })
     
     page.drawText(formatCurrency(item.price), { 
-      x: col.unit, 
-      y: y + 5, 
+      x: col.precioUnit, 
+      y: y + 8, 
       size: 10, 
       font: font, 
-      color: c.darkMuted,
+      color: c.black,
     })
     
     page.drawText(formatCurrency(item.price * item.quantity), { 
-      x: col.sub, 
-      y: y + 5, 
+      x: col.subtotal, 
+      y: y + 8, 
       size: 11, 
       font: fontBold, 
-      color: c.dark,
+      color: c.black,
     })
 
     y -= rh
     alt = !alt
   }
 
-  // ===== TOTAL PREMIUM =====
-  
+  // TOTAL
   y -= 30
   
-  page.drawRectangle({
-    x: 45,
-    y: y - 15,
-    width: width - 90,
-    height: 60,
-    color: c.success,
-  })
+  const totalBoxW = 280
+  const totalBoxH = 60
+  const totalBoxX = width - margin - totalBoxW
   
   page.drawRectangle({
-    x: 52,
-    y: y - 8,
-    width: width - 104,
-    height: 46,
-    color: rgb(1, 1, 1),
-    opacity: 0.15,
+    x: totalBoxX,
+    y: y - 15,
+    width: totalBoxW,
+    height: totalBoxH,
+    color: c.celeste,
+    borderColor: c.gray,
+    borderWidth: 1,
   })
 
-  page.drawText('TOTAL A PAGAR', {
-    x: 70,
-    y: y + 13,
-    size: 13,
+  page.drawText('TOTAL', {
+    x: totalBoxX + 20,
+    y: y + 15,
+    size: 12,
     font: fontBold,
-    color: c.white,
+    color: c.black,
   })
   
   const totalStr = formatCurrency(data.total)
+  const totalWidth = fontBold.widthOfTextAtSize(totalStr, 24)
   page.drawText(totalStr, {
-    x: width - 220,
-    y: y + 8,
-    size: 26,
+    x: totalBoxX + totalBoxW - totalWidth - 20,
+    y: y + 10,
+    size: 24,
     font: fontBold,
-    color: c.white,
+    color: c.black,
   })
 
-  // ===== FIRMAS ELEGANTES =====
-  
-  y -= 100
-  const sigW = 210
-  const sigGap = (width - 90 - sigW * 2) / 2
-  const lineY = y + 50
-
-  // Firma izquierda
-  page.drawRectangle({
-    x: 45,
-    y: lineY - 2,
-    width: sigW,
-    height: 1.5,
-    color: c.grayLight,
-  })
-  
-  page.drawCircle({
-    x: 45 + sigW / 2,
-    y: lineY - 1,
-    size: 4,
-    color: c.primary,
-  })
-
-  page.drawText('Firma y Sello', {
-    x: 45 + (sigW - 75) / 2,
-    y: lineY - 22,
-    size: 10,
-    font: fontBold,
-    color: c.dark,
-  })
-  page.drawText('Helados Mio', {
-    x: 45 + (sigW - 60) / 2,
-    y: lineY - 38,
-    size: 8.5,
-    font: font,
-    color: c.gray,
-  })
-
-  // Firma derecha
-  const sig2X = 45 + sigW + sigGap
-  page.drawRectangle({
-    x: sig2X,
-    y: lineY - 2,
-    width: sigW,
-    height: 1.5,
-    color: c.grayLight,
-  })
-  
-  page.drawCircle({
-    x: sig2X + sigW / 2,
-    y: lineY - 1,
-    size: 4,
-    color: c.accent,
-  })
-
-  page.drawText('Firma del Cliente', {
-    x: sig2X + (sigW - 95) / 2,
-    y: lineY - 22,
-    size: 10,
-    font: fontBold,
-    color: c.dark,
-  })
-  page.drawText('Aclaración y DNI', {
-    x: sig2X + (sigW - 80) / 2,
-    y: lineY - 38,
-    size: 8.5,
-    font: font,
-    color: c.gray,
-  })
-
-  // ===== FOOTER MINIMALISTA =====
-  
-  y = 55
+  // Footer
+  y -= 80
   
   page.drawLine({
-    start: { x: width * 0.25, y: y + 25 },
-    end: { x: width * 0.75, y: y + 25 },
+    start: { x: width * 0.25, y: y + 10 },
+    end: { x: width * 0.75, y: y + 10 },
     thickness: 0.5,
-    color: rgb(0.88, 0.88, 0.92),
-  })
-
-  page.drawText('Gracias por elegirnos  •  Helados Mio  •  Calidad Artesanal', {
-    x: (width - 310) / 2,
-    y: y + 5,
-    size: 9,
-    font: font,
     color: c.gray,
   })
+
+  const footerText = 'Gracias por elegirnos • Helados Mio • Calidad artesanal'
+  const footerWidth = font.widthOfTextAtSize(footerText, 9)
+  page.drawText(footerText, {
+    x: (width - footerWidth) / 2,
+    y: y - 10,
+    size: 9,
+    font: font,
+    color: c.midGray,
+  })
   
-  page.drawText('Este documento no es válido como factura fiscal', {
-    x: (width - 245) / 2,
-    y: y - 12,
+  const legalText = 'Este documento no es válido como factura fiscal'
+  const legalWidth = font.widthOfTextAtSize(legalText, 7.5)
+  page.drawText(legalText, {
+    x: (width - legalWidth) / 2,
+    y: y - 27,
     size: 7.5,
     font: font,
-    color: c.grayLight,
+    color: c.midGray,
   })
 
   const pdfBytes = await pdfDoc.save()
