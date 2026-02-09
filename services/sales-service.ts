@@ -1,3 +1,4 @@
+// services/sales-service.ts
 import {
   collection,
   doc,
@@ -61,22 +62,29 @@ export const processSale = async (data: {
   sellerId?: string
   sellerName?: string
   items: CartItem[]
-  paymentType: 'cash' | 'credit'
+  paymentType: 'cash' | 'credit' | 'mixed'
+  cashAmount?: number
+  creditAmount?: number
   source?: 'direct' | 'order'
   createOrder?: boolean
+  deliveryMethod?: 'pickup' | 'delivery'
+  deliveryAddress?: string
 }): Promise<Sale> => {
   const total = data.items.reduce((acc, item) => acc + item.product.price * item.quantity, 0)
   const saleRef = doc(collection(firestore, SALES_COLLECTION))
   const batch = writeBatch(firestore)
 
-  let clientAddress = 'Retiro en local'
+  let clientAddress = data.deliveryAddress || 'Retiro en local'
   let resolvedClientName = data.clientName ?? 'Venta directa'
   let resolvedTaxCategory: 'responsable_inscripto' | 'monotributo' | 'consumidor_final' | 'exento' | 'no_responsable' | undefined
+  
   if (data.clientId) {
     const clientSnapshot = await getDoc(doc(firestore, CLIENTS_COLLECTION, data.clientId))
     if (clientSnapshot.exists()) {
       const clientData = clientSnapshot.data()
-      clientAddress = clientData.address ?? clientAddress
+      if (data.deliveryMethod === 'delivery' && !data.deliveryAddress) {
+        clientAddress = clientData.address ?? clientAddress
+      }
       resolvedClientName = clientData.name ?? resolvedClientName
       resolvedTaxCategory = clientData.taxCategory
     }
@@ -98,15 +106,19 @@ export const processSale = async (data: {
     })),
     total,
     paymentType: data.paymentType,
+    cashAmount: data.cashAmount ?? null,
+    creditAmount: data.creditAmount ?? null,
     status: 'completed',
     invoiceEmitted: false,
     invoiceStatus: 'pending',
+    deliveryMethod: data.deliveryMethod ?? 'pickup',
+    deliveryAddress: clientAddress,
     createdAt: serverTimestamp(),
   }
 
   batch.set(saleRef, salePayload)
 
-  const shouldCreateOrder = data.createOrder ?? true
+  const shouldCreateOrder = data.createOrder ?? (data.deliveryMethod === 'delivery')
   if (shouldCreateOrder) {
     const orderRef = doc(collection(firestore, ORDERS_COLLECTION))
     batch.set(orderRef, {
@@ -129,14 +141,20 @@ export const processSale = async (data: {
     })
   }
 
-  if (data.paymentType === 'credit' && data.clientId) {
+  const amountToCredit = data.paymentType === 'credit' 
+    ? total 
+    : data.paymentType === 'mixed' 
+      ? (data.creditAmount ?? 0)
+      : 0
+
+  if (amountToCredit > 0 && data.clientId) {
     batch.update(doc(firestore, CLIENTS_COLLECTION, data.clientId), {
-      currentBalance: increment(total),
+      currentBalance: increment(amountToCredit),
     })
     batch.set(doc(collection(firestore, TRANSACTIONS_COLLECTION)), {
       clientId: data.clientId,
       type: 'debt',
-      amount: total,
+      amount: amountToCredit,
       description: `Venta #${saleRef.id}`,
       date: serverTimestamp(),
       saleId: saleRef.id,

@@ -1,3 +1,4 @@
+// lib/api.ts
 import type { Client, Product, Sale, Seller, SellerCommission, Transaction, CartItem, Order, OrderStatus } from './types'
 import {
   createProduct,
@@ -46,6 +47,7 @@ import {
   getProductDistribution,
   getDashboardData,
 } from '@/services/dashboard-service'
+
 export const productsApi = {
   async getAll(): Promise<Product[]> {
     return getProducts()
@@ -99,9 +101,13 @@ export const salesApi = {
     sellerId?: string
     sellerName?: string
     items: CartItem[]
-    paymentType: 'cash' | 'credit'
+    paymentType: 'cash' | 'credit' | 'mixed'
+    cashAmount?: number
+    creditAmount?: number
     source?: 'direct' | 'order'
     createOrder?: boolean
+    deliveryMethod?: 'pickup' | 'delivery'
+    deliveryAddress?: string
   }): Promise<Sale> {
     return processSale(data)
   },

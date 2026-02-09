@@ -28,14 +28,14 @@ import { Input } from '@/components/ui/input'
 import { ClientModal } from '@/components/clientes/client-modal'
 import { ordersApi, salesApi, clientsApi, paymentsApi, remitoApi } from '@/lib/api'
 import type { Order, OrderStatus, Client } from '@/lib/types'
-import { Clock, ChefHat, Truck, CheckCircle, Package, Banknote, CreditCard, FileText, Loader2, UserPlus } from 'lucide-react'
+import { Clock, ChefHat, Truck, CheckCircle, Package, Banknote, CreditCard, FileText, Loader2, UserPlus, Eye, X, User, MapPin, Calendar, Box } from 'lucide-react'
 import { useAuth } from '@/hooks/use-auth'
 
-const statusConfig: Record<OrderStatus, { label: string; icon: React.ElementType; color: string }> = {
-  pending: { label: 'Pendiente', icon: Clock, color: 'bg-warning/10 text-warning' },
-  preparation: { label: 'Preparación', icon: ChefHat, color: 'bg-primary/10 text-primary' },
-  delivery: { label: 'En Reparto', icon: Truck, color: 'bg-accent/10 text-accent' },
-  completed: { label: 'Completado', icon: CheckCircle, color: 'bg-success/10 text-success' },
+const statusConfig: Record<OrderStatus, { label: string; icon: React.ElementType; color: string; dotColor: string }> = {
+  pending: { label: 'Pendiente', icon: Clock, color: 'text-amber-600', dotColor: 'bg-amber-500' },
+  preparation: { label: 'Preparación', icon: ChefHat, color: 'text-blue-600', dotColor: 'bg-blue-500' },
+  delivery: { label: 'En Reparto', icon: Truck, color: 'text-orange-600', dotColor: 'bg-orange-500' },
+  completed: { label: 'Completado', icon: CheckCircle, color: 'text-green-600', dotColor: 'bg-green-500' },
 }
 
 const statusFlow: OrderStatus[] = ['pending', 'preparation', 'delivery', 'completed']
@@ -46,6 +46,10 @@ export default function PedidosPage() {
   const [clients, setClients] = useState<Client[]>([])
   const [loading, setLoading] = useState(true)
   const [filterStatus, setFilterStatus] = useState<string>('all')
+  
+  // Detail modal state
+  const [showDetailModal, setShowDetailModal] = useState(false)
+  const [detailOrder, setDetailOrder] = useState<Order | null>(null)
   
   // Payment modal state
   const [showPaymentModal, setShowPaymentModal] = useState(false)
@@ -106,6 +110,7 @@ export default function PedidosPage() {
       const order = orders.find(o => o.id === orderId)
       if (order) {
         setSelectedOrder(order)
+        setShowDetailModal(false)
         setShowPaymentModal(true)
       }
       return
@@ -114,6 +119,9 @@ export default function PedidosPage() {
     try {
       const updated = await ordersApi.updateStatus(orderId, newStatus)
       setOrders(orders.map(o => o.id === orderId ? updated : o))
+      if (detailOrder?.id === orderId) {
+        setDetailOrder(updated)
+      }
     } catch (error) {
       console.error('Error updating order status:', error)
     }
@@ -129,14 +137,10 @@ export default function PedidosPage() {
     setProcessingPayment(true)
     
     try {
-      // Update order status
-      const updated = await ordersApi.updateStatus(selectedOrder.id, 'completed')
-      setOrders(orders.map(o => o.id === selectedOrder.id ? updated : o))
-      
       const total = calculateOrderTotal(selectedOrder)
       const client = clients.find(c => c.id === selectedClientId)
 
-      if ((paymentType === 'credit' || paymentType === 'split') && !client) {
+      if ((paymentType === 'credit' || paymentType === 'split') && !selectedClientId) {
         throw new Error('Debe seleccionar un cliente para cuenta corriente')
       }
 
@@ -166,6 +170,7 @@ export default function PedidosPage() {
         paymentType: paymentType === 'split' ? 'credit' : paymentType,
         source: 'order',
         createOrder: false,
+        orderId: selectedOrder.id,
       })
 
       if (paymentType === 'split' && client && normalizedCashAmount > 0) {
@@ -175,6 +180,10 @@ export default function PedidosPage() {
           description: `Pago parcial pedido #${selectedOrder.id}`,
         })
       }
+
+      // Update order status to completed
+      const updated = await ordersApi.updateStatus(selectedOrder.id, 'completed')
+      setOrders(orders.map(o => o.id === selectedOrder.id ? updated : o))
       
       setLastSaleResult({
         paymentType,
@@ -200,6 +209,7 @@ export default function PedidosPage() {
       setDocumentType('invoice')
     } catch (error) {
       console.error('Error completing order:', error)
+      alert(error instanceof Error ? error.message : 'Error al completar el pedido')
     } finally {
       setProcessingPayment(false)
     }
@@ -241,7 +251,8 @@ export default function PedidosPage() {
         )
       }
     } catch (error) {
-      console.error('Error emitting invoice:', error)
+      console.error('Error emitting document:', error)
+      alert('Error al emitir el documento')
     } finally {
       setEmittingInvoice(false)
     }
@@ -299,15 +310,15 @@ export default function PedidosPage() {
 
   return (
     <MainLayout title="Pedidos" description="Seguimiento de pedidos y entregas">
-      {/* Filters */}
-      <div className="flex flex-col sm:flex-row gap-4 justify-between mb-6">
-        <div className="flex items-center gap-4">
+      {/* Filters & Stats */}
+      <div className="mb-6 space-y-4">
+        <div className="flex flex-col sm:flex-row gap-3 justify-between">
           <Select value={filterStatus} onValueChange={setFilterStatus}>
-            <SelectTrigger className="w-48">
+            <SelectTrigger className="w-full sm:w-48">
               <SelectValue placeholder="Filtrar por estado" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">Todos los estados</SelectItem>
+              <SelectItem value="all">Todos</SelectItem>
               {statusFlow.map((status) => (
                 <SelectItem key={status} value={status}>
                   {statusConfig[status].label}
@@ -315,23 +326,23 @@ export default function PedidosPage() {
               ))}
             </SelectContent>
           </Select>
-        </div>
 
-        {/* Status Summary */}
-        <div className="flex gap-2 flex-wrap">
-          {statusFlow.map((status) => {
-            const count = orders.filter(o => o.status === status).length
-            const config = statusConfig[status]
-            return (
-              <div
-                key={status}
-                className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-sm ${config.color}`}
-              >
-                <config.icon className="h-4 w-4" />
-                <span>{count}</span>
-              </div>
-            )
-          })}
+          <div className="flex gap-2 overflow-x-auto pb-2 sm:pb-0">
+            {statusFlow.map((status) => {
+              const count = orders.filter(o => o.status === status).length
+              const config = statusConfig[status]
+              return (
+                <div
+                  key={status}
+                  className="flex items-center gap-2 px-3 py-1.5 bg-white border rounded-lg whitespace-nowrap"
+                >
+                  <div className={`w-2 h-2 rounded-full ${config.dotColor}`} />
+                  <span className="text-sm font-medium">{count}</span>
+                  <span className="text-xs text-gray-500 hidden sm:inline">{config.label}</span>
+                </div>
+              )
+            })}
+          </div>
         </div>
       </div>
 
@@ -341,127 +352,250 @@ export default function PedidosPage() {
       ) : filteredOrders.length === 0 ? (
         <Card>
           <CardContent className="py-12 text-center">
-            <Package className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-            <p className="text-muted-foreground">No hay pedidos para mostrar</p>
+            <Package className="h-12 w-12 text-gray-400 mx-auto mb-3" />
+            <p className="text-gray-500">No hay pedidos</p>
           </CardContent>
         </Card>
       ) : (
-        <div className="space-y-4 max-w-4xl mx-auto">
-          {filteredOrders.map((order) => {
-            const config = statusConfig[order.status]
-            const nextStatus = getNextStatus(order.status)
-            
-            return (
-              <Card key={order.id} className="overflow-hidden">
-                <CardContent className="p-0">
-                  <div className="flex flex-col lg:flex-row">
-                    {/* Order Info */}
-                    <div className="flex-1 p-3 sm:p-4 lg:p-5">
-                      <div className="flex items-start justify-between mb-3">
+        <div className="bg-white border rounded-lg overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-gray-50 border-b">
+                <tr>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                    Pedido
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider hidden md:table-cell">
+                    Cliente
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider hidden lg:table-cell">
+                    Productos
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider hidden sm:table-cell">
+                    Estado
+                  </th>
+                  <th className="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                    Acción
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y">
+                {filteredOrders.map((order) => {
+                  const config = statusConfig[order.status]
+                  return (
+                    <tr key={order.id} className="hover:bg-gray-50 transition-colors">
+                      <td className="px-4 py-4">
                         <div>
-                          <h3 className="font-semibold text-foreground">
-                            Pedido #{order.id}
-                          </h3>
-                          <p className="text-sm text-muted-foreground">
-                            {order.clientName || 'Venta directa'}
-                          </p>
-                          <p className="text-xs text-muted-foreground">
-                            Vendedor: {order.sellerName || 'Sin asignar'}
-                          </p>
+                          <p className="font-semibold text-gray-900">#{order.id}</p>
+                          <p className="text-xs text-gray-500 mt-0.5">{formatDate(order.createdAt)}</p>
+                          <div className="sm:hidden mt-2">
+                            <div className="flex items-center gap-2">
+                              <div className={`w-2 h-2 rounded-full ${config.dotColor}`} />
+                              <span className={`text-xs font-medium ${config.color}`}>
+                                {config.label}
+                              </span>
+                            </div>
+                          </div>
                         </div>
-                        <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs sm:text-sm ${config.color}`}>
-                          <config.icon className="h-4 w-4" />
-                          {config.label}
-                        </div>
-                      </div>
-
-                      {/* Items */}
-                      <div className="mb-3">
-                        <p className="text-xs text-muted-foreground md:hidden">
-                          {order.items.length} productos
+                      </td>
+                      <td className="px-4 py-4 hidden md:table-cell">
+                        <p className="text-sm font-medium text-gray-900">
+                          {order.clientName || 'Venta directa'}
                         </p>
-                        <div className="hidden md:block space-y-1">
-                          {order.items.map((item, index) => (
-                            <div key={index} className="flex justify-between text-sm">
-                              <span className="text-foreground">{item.name}</span>
-                              <span className="text-muted-foreground">x{item.quantity}</span>
-                            </div>
-                          ))}
+                        <p className="text-xs text-gray-500 mt-0.5">
+                          {order.sellerName || 'Sin vendedor'}
+                        </p>
+                      </td>
+                      <td className="px-4 py-4 hidden lg:table-cell">
+                        <p className="text-sm text-gray-600">
+                          {order.items.length} {order.items.length === 1 ? 'producto' : 'productos'}
+                        </p>
+                      </td>
+                      <td className="px-4 py-4 hidden sm:table-cell">
+                        <div className="flex items-center gap-2">
+                          <div className={`w-2 h-2 rounded-full ${config.dotColor}`} />
+                          <span className={`text-sm font-medium ${config.color}`}>
+                            {config.label}
+                          </span>
                         </div>
-                      </div>
-
-                      {/* Address & Time */}
-                      <div className="flex flex-wrap gap-3 text-xs sm:text-sm">
-                        <div>
-                          <span className="text-muted-foreground">Dirección: </span>
-                          <span className="text-foreground">{order.address}</span>
-                        </div>
-                        <div>
-                          <span className="text-muted-foreground">Creado: </span>
-                          <span className="text-foreground">{formatDate(order.createdAt)}</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Status Timeline */}
-                    <div className="border-t lg:border-t-0 lg:border-l border-border p-3 sm:p-4 lg:p-5 lg:w-64 bg-muted/20">
-                      <p className="text-xs sm:text-sm font-medium text-foreground mb-3 hidden md:block">
-                        Progreso
-                      </p>
-
-                      <div className="space-y-2 hidden md:block">
-                        {statusFlow.map((status, index) => {
-                          const isCompleted = statusFlow.indexOf(order.status) >= index
-                          const isCurrent = order.status === status
-                          const stepConfig = statusConfig[status]
-                          
-                          return (
-                            <div key={status} className="flex items-center gap-3">
-                              <div className={`flex items-center justify-center w-7 h-7 rounded-full ${
-                                isCompleted 
-                                  ? stepConfig.color
-                                  : 'bg-muted text-muted-foreground'
-                              }`}>
-                                <stepConfig.icon className="h-4 w-4" />
-                              </div>
-                              <div className="flex-1">
-                                <p className={`text-xs ${
-                                  isCompleted ? 'text-foreground font-medium' : 'text-muted-foreground'
-                                }`}>
-                                  {stepConfig.label}
-                                </p>
-                              </div>
-                              {isCurrent && index < statusFlow.length - 1 && (
-                                <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
-                              )}
-                            </div>
-                          )
-                        })}
-                      </div>
-
-                      {/* Action Button */}
-                      {nextStatus && (
+                      </td>
+                      <td className="px-4 py-4 text-right">
                         <Button
-                          className="w-full mt-3"
-                          onClick={() => handleStatusChange(order.id, nextStatus)}
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            setDetailOrder(order)
+                            setShowDetailModal(true)
+                          }}
+                          className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
                         >
-                          {nextStatus === 'completed' ? 'Completar Pedido' : `Avanzar a ${statusConfig[nextStatus].label}`}
+                          <Eye className="h-4 w-4 mr-1" />
+                          Ver
                         </Button>
-                      )}
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            )
-          })}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
+
+      {/* Detail Modal */}
+      <Dialog open={showDetailModal} onOpenChange={setShowDetailModal}>
+        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <div className="flex items-center justify-between">
+              <DialogTitle className="text-xl">Pedido #{detailOrder?.id}</DialogTitle>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowDetailModal(false)}
+                className="h-8 w-8 p-0"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+            <p className="text-sm text-gray-500 sr-only">Detalles completos del pedido</p>
+          </DialogHeader>
+
+          {detailOrder && (
+            <div className="space-y-6">
+              {/* Status */}
+              <div>
+                <Label className="text-xs text-gray-500 uppercase tracking-wide mb-2 block">
+                  Estado actual
+                </Label>
+                <div className="flex items-center gap-2">
+                  {React.createElement(statusConfig[detailOrder.status].icon, {
+                    className: `h-5 w-5 ${statusConfig[detailOrder.status].color}`
+                  })}
+                  <span className={`font-semibold ${statusConfig[detailOrder.status].color}`}>
+                    {statusConfig[detailOrder.status].label}
+                  </span>
+                </div>
+              </div>
+
+              {/* Client Info */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <Label className="text-xs text-gray-500 uppercase tracking-wide mb-2 flex items-center gap-1">
+                    <User className="h-3 w-3" />
+                    Cliente
+                  </Label>
+                  <p className="font-medium text-gray-900">
+                    {detailOrder.clientName || 'Venta directa'}
+                  </p>
+                </div>
+                <div>
+                  <Label className="text-xs text-gray-500 uppercase tracking-wide mb-2 block">
+                    Vendedor
+                  </Label>
+                  <p className="font-medium text-gray-900">
+                    {detailOrder.sellerName || 'Sin asignar'}
+                  </p>
+                </div>
+              </div>
+
+              {/* Address & Date */}
+              <div className="space-y-3">
+                <div>
+                  <Label className="text-xs text-gray-500 uppercase tracking-wide mb-2 flex items-center gap-1">
+                    <MapPin className="h-3 w-3" />
+                    Dirección de entrega
+                  </Label>
+                  <p className="text-gray-900">{detailOrder.address}</p>
+                </div>
+                <div>
+                  <Label className="text-xs text-gray-500 uppercase tracking-wide mb-2 flex items-center gap-1">
+                    <Calendar className="h-3 w-3" />
+                    Fecha de creación
+                  </Label>
+                  <p className="text-gray-900">{formatDate(detailOrder.createdAt)}</p>
+                </div>
+              </div>
+
+              {/* Products */}
+              <div>
+                <Label className="text-xs text-gray-500 uppercase tracking-wide mb-3 flex items-center gap-1">
+                  <Box className="h-3 w-3" />
+                  Productos
+                </Label>
+                <div className="bg-gray-50 rounded-lg p-4 space-y-2">
+                  {detailOrder.items.map((item, index) => (
+                    <div key={index} className="flex justify-between items-center">
+                      <span className="text-sm text-gray-900">{item.name}</span>
+                      <span className="font-semibold text-gray-900">x{item.quantity}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Timeline */}
+              <div>
+                <Label className="text-xs text-gray-500 uppercase tracking-wide mb-3 block">
+                  Progreso
+                </Label>
+                <div className="space-y-2">
+                  {statusFlow.map((status, index) => {
+                    const isCompleted = statusFlow.indexOf(detailOrder.status) >= index
+                    const isCurrent = detailOrder.status === status
+                    const stepConfig = statusConfig[status]
+                    
+                    return (
+                      <div key={status} className="flex items-center gap-3">
+                        <div className={`flex items-center justify-center w-8 h-8 rounded-full border-2 ${
+                          isCompleted 
+                            ? `${stepConfig.dotColor} border-transparent`
+                            : 'bg-white border-gray-300'
+                        }`}>
+                          {isCompleted ? (
+                            <CheckCircle className="h-4 w-4 text-white" />
+                          ) : (
+                            <div className="w-2 h-2 rounded-full bg-gray-300" />
+                          )}
+                        </div>
+                        <div className="flex-1">
+                          <p className={`text-sm font-medium ${
+                            isCompleted ? 'text-gray-900' : 'text-gray-400'
+                          }`}>
+                            {stepConfig.label}
+                          </p>
+                        </div>
+                        {isCurrent && (
+                          <Badge variant="secondary" className="text-xs">
+                            Actual
+                          </Badge>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+
+              {/* Action Button */}
+              {getNextStatus(detailOrder.status) && (
+                <Button
+                  className="w-full"
+                  onClick={() => handleStatusChange(detailOrder.id, getNextStatus(detailOrder.status)!)}
+                >
+                  {getNextStatus(detailOrder.status) === 'completed' 
+                    ? 'Completar Pedido' 
+                    : `Avanzar a ${statusConfig[getNextStatus(detailOrder.status)!].label}`}
+                </Button>
+              )}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* Payment Modal */}
       <Dialog open={showPaymentModal} onOpenChange={setShowPaymentModal}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Completar Pedido</DialogTitle>
+            <p className="text-sm text-gray-500 sr-only">Seleccionar método de pago para completar el pedido</p>
           </DialogHeader>
           
           {selectedOrder && (
@@ -493,32 +627,28 @@ export default function PedidosPage() {
                   </Label>
                 </div>
                 
-                <div className={`flex items-center space-x-3 p-4 rounded-lg border border-border ${selectedOrder?.clientId ? 'hover:bg-muted/50 cursor-pointer' : 'opacity-60'}`}>
-                  <RadioGroupItem value="credit" id="credit-order" disabled={!selectedOrder?.clientId} />
+                <div className="flex items-center space-x-3 p-4 rounded-lg border border-border hover:bg-muted/50 cursor-pointer">
+                  <RadioGroupItem value="credit" id="credit-order" />
                   <Label htmlFor="credit-order" className="flex items-center gap-3 cursor-pointer flex-1">
                     <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
                       <CreditCard className="h-5 w-5 text-primary" />
                     </div>
                     <div>
                       <p className="font-medium text-foreground">Cuenta Corriente</p>
-                      <p className="text-sm text-muted-foreground">
-                        {selectedOrder?.clientId ? 'Se suma a deudores' : 'Requiere cliente'}
-                      </p>
+                      <p className="text-sm text-muted-foreground">Se suma a deudores</p>
                     </div>
                   </Label>
                 </div>
 
-                <div className={`flex items-center space-x-3 p-4 rounded-lg border border-border ${selectedOrder?.clientId ? 'hover:bg-muted/50 cursor-pointer' : 'opacity-60'}`}>
-                  <RadioGroupItem value="split" id="split-order" disabled={!selectedOrder?.clientId} />
+                <div className="flex items-center space-x-3 p-4 rounded-lg border border-border hover:bg-muted/50 cursor-pointer">
+                  <RadioGroupItem value="split" id="split-order" />
                   <Label htmlFor="split-order" className="flex items-center gap-3 cursor-pointer flex-1">
                     <div className="h-10 w-10 rounded-full bg-warning/10 flex items-center justify-center">
                       <Banknote className="h-5 w-5 text-warning" />
                     </div>
                     <div>
                       <p className="font-medium text-foreground">Pago Parcial</p>
-                      <p className="text-sm text-muted-foreground">
-                        {selectedOrder?.clientId ? 'Parte en efectivo y el resto a cuenta' : 'Requiere cliente'}
-                      </p>
+                      <p className="text-sm text-muted-foreground">Parte en efectivo y el resto a cuenta</p>
                     </div>
                   </Label>
                 </div>
@@ -552,7 +682,7 @@ export default function PedidosPage() {
                   </div>
                   {clientSearch && filteredClients.length === 0 && (
                     <p className="text-xs text-muted-foreground">
-                      No se encontró el cliente. Puedes crearlo con “Nuevo”.
+                      No se encontró el cliente. Puedes crearlo con "Nuevo".
                     </p>
                   )}
                 </div>
@@ -614,6 +744,7 @@ export default function PedidosPage() {
       {/* Success Modal */}
       <Dialog open={showSuccessModal} onOpenChange={setShowSuccessModal}>
         <DialogContent className="sm:max-w-md">
+          <p className="text-sm text-gray-500 sr-only">Pedido completado exitosamente</p>
           <div className="text-center py-4">
             <div className="mx-auto h-16 w-16 rounded-full bg-success/10 flex items-center justify-center mb-4">
               <CheckCircle className="h-8 w-8 text-success" />
