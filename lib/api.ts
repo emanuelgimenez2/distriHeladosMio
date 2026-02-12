@@ -33,7 +33,7 @@ import {
   updateSeller,
 } from '@/services/sellers-service'
 import { createInvoice, createRemito } from '@/services/invoice-service'
-import { getOrders, updateOrderStatus } from '@/services/orders-service'
+import { getOrders, updateOrderStatus, completeOrder } from '@/services/orders-service'
 import { doc, updateDoc } from 'firebase/firestore'
 import { firestore } from '@/lib/firebase'
 import {
@@ -157,6 +157,9 @@ export const ordersApi = {
   },
   async updateStatus(id: string, status: OrderStatus): Promise<Order> {
     return updateOrderStatus(id, status)
+  },
+  async completeOrder(id: string, saleId: string): Promise<Order> {
+    return completeOrder(id, saleId)
   },
 }
 

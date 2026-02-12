@@ -1,14 +1,17 @@
-// services/sales-service.ts
-import {
-  collection,
-  doc,
-  getDoc,
-  getDocs,
-  increment,
-  query,
-  serverTimestamp,
-  where,
+// services/sales-service.ts - AGREGAR esta función junto con getSales
+import { 
+  collection, 
+  getDocs, 
+  query, 
+  where, 
+  orderBy, 
+  doc, 
+  getDoc, 
+  addDoc, 
+  serverTimestamp, 
+  updateDoc,
   writeBatch,
+  increment
 } from 'firebase/firestore'
 import { firestore } from '@/lib/firebase'
 import type { CartItem, Sale } from '@/lib/types'
@@ -24,36 +27,86 @@ const ORDERS_COLLECTION = 'pedidos'
 
 const COMMISSION_RATE = 0.1
 
+// ✅ getSales existente
 export const getSales = async (): Promise<Sale[]> => {
-  const snapshot = await getDocs(collection(firestore, SALES_COLLECTION))
-  return snapshot.docs
-    .map((docSnap) => {
-      const data = docSnap.data()
-      return {
-        id: docSnap.id,
-        clientId: data.clientId ?? undefined,
-        clientName: data.clientName ?? undefined,
-        clientPhone: data.clientPhone ?? undefined,
-        clientTaxCategory: data.clientTaxCategory ?? undefined,
-        sellerId: data.sellerId ?? undefined,
-        sellerName: data.sellerName ?? undefined,
-        source: data.source ?? undefined,
-        items: data.items ?? [],
-        total: data.total,
-        paymentType: data.paymentType,
-        status: data.status,
-        invoiceNumber: data.invoiceNumber ?? undefined,
-        remitoNumber: data.remitoNumber ?? undefined,
-        invoiceEmitted: data.invoiceEmitted ?? false,
-        invoiceStatus: data.invoiceStatus ?? 'pending',
-        invoicePdfUrl: data.invoicePdfUrl ?? undefined,
-        invoiceWhatsappUrl: data.invoiceWhatsappUrl ?? undefined,
-        remitoPdfUrl: data.remitoPdfUrl ?? undefined,
-        createdAt: toDate(data.createdAt),
-      }
-    })
-    .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+  const salesQuery = query(
+    collection(firestore, SALES_COLLECTION),
+    orderBy('createdAt', 'desc')
+  )
+  const snapshot = await getDocs(salesQuery)
+  
+  return snapshot.docs.map((docSnap) => {
+    const data = docSnap.data()
+    return {
+      id: docSnap.id,
+      clientId: data.clientId ?? undefined,
+      clientName: data.clientName ?? undefined,
+      clientPhone: data.clientPhone ?? undefined,
+      clientTaxCategory: data.clientTaxCategory ?? undefined,
+      sellerId: data.sellerId ?? undefined,
+      sellerName: data.sellerName ?? undefined,
+      source: data.source ?? 'direct',
+      items: data.items ?? [],
+      total: data.total ?? 0,
+      paymentType: data.paymentType ?? 'cash',
+      cashAmount: data.cashAmount ?? undefined,
+      creditAmount: data.creditAmount ?? undefined,
+      orderId: data.orderId ?? undefined,
+      deliveryMethod: data.deliveryMethod ?? undefined,
+      deliveryAddress: data.deliveryAddress ?? undefined,
+      invoiceEmitted: data.invoiceEmitted ?? false,
+      invoiceNumber: data.invoiceNumber ?? undefined,
+      invoiceStatus: data.invoiceStatus ?? 'pending',
+      invoicePdfUrl: data.invoicePdfUrl ?? undefined,
+      invoiceWhatsappUrl: data.invoiceWhatsappUrl ?? undefined,
+      remitoNumber: data.remitoNumber ?? undefined,
+      remitoPdfUrl: data.remitoPdfUrl ?? undefined,
+      createdAt: toDate(data.createdAt),
+    }
+  })
 }
+
+// ✅ NUEVA FUNCIÓN: getSalesBySeller - AGREGAR ESTA
+export const getSalesBySeller = async (sellerId: string): Promise<Sale[]> => {
+  const salesQuery = query(
+    collection(firestore, SALES_COLLECTION),
+    where('sellerId', '==', sellerId),
+    orderBy('createdAt', 'desc')
+  )
+  const snapshot = await getDocs(salesQuery)
+  
+  return snapshot.docs.map((docSnap) => {
+    const data = docSnap.data()
+    return {
+      id: docSnap.id,
+      clientId: data.clientId ?? undefined,
+      clientName: data.clientName ?? undefined,
+      clientPhone: data.clientPhone ?? undefined,
+      clientTaxCategory: data.clientTaxCategory ?? undefined,
+      sellerId: data.sellerId ?? undefined,
+      sellerName: data.sellerName ?? undefined,
+      source: data.source ?? 'direct',
+      items: data.items ?? [],
+      total: data.total ?? 0,
+      paymentType: data.paymentType ?? 'cash',
+      cashAmount: data.cashAmount ?? undefined,
+      creditAmount: data.creditAmount ?? undefined,
+      orderId: data.orderId ?? undefined,
+      deliveryMethod: data.deliveryMethod ?? undefined,
+      deliveryAddress: data.deliveryAddress ?? undefined,
+      invoiceEmitted: data.invoiceEmitted ?? false,
+      invoiceNumber: data.invoiceNumber ?? undefined,
+      invoiceStatus: data.invoiceStatus ?? 'pending',
+      invoicePdfUrl: data.invoicePdfUrl ?? undefined,
+      invoiceWhatsappUrl: data.invoiceWhatsappUrl ?? undefined,
+      remitoNumber: data.remitoNumber ?? undefined,
+      remitoPdfUrl: data.remitoPdfUrl ?? undefined,
+      createdAt: toDate(data.createdAt),
+    }
+  })
+}
+
+// ... resto del código (processSale, etc.)
 
 export const processSale = async (data: {
   clientId?: string
@@ -199,33 +252,5 @@ export const processSale = async (data: {
   }
 }
 
-export const getSalesBySeller = async (sellerId: string): Promise<Sale[]> => {
-  const snapshot = await getDocs(
-    query(collection(firestore, SALES_COLLECTION), where('sellerId', '==', sellerId))
-  )
-  return snapshot.docs.map((docSnap) => {
-    const data = docSnap.data()
-    return {
-      id: docSnap.id,
-      clientId: data.clientId ?? undefined,
-      clientName: data.clientName ?? undefined,
-      clientPhone: data.clientPhone ?? undefined,
-      clientTaxCategory: data.clientTaxCategory ?? undefined,
-      sellerId: data.sellerId ?? undefined,
-      sellerName: data.sellerName ?? undefined,
-      source: data.source ?? undefined,
-      items: data.items ?? [],
-      total: data.total,
-      paymentType: data.paymentType,
-      status: data.status,
-      invoiceNumber: data.invoiceNumber ?? undefined,
-      remitoNumber: data.remitoNumber ?? undefined,
-      invoiceEmitted: data.invoiceEmitted ?? false,
-      invoiceStatus: data.invoiceStatus ?? 'pending',
-      invoicePdfUrl: data.invoicePdfUrl ?? undefined,
-      invoiceWhatsappUrl: data.invoiceWhatsappUrl ?? undefined,
-      remitoPdfUrl: data.remitoPdfUrl ?? undefined,
-      createdAt: toDate(data.createdAt),
-    }
-  })
-}
+// ❌ ELIMINAR TODO DESDE AQUÍ HASTA EL FINAL (la segunda getSales y cualquier otra duplicación)
+// export const getSales = async (): Promise<Sale[]> => { ... }
