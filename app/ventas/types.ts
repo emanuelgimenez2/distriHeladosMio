@@ -1,3 +1,4 @@
+//app\ventas\types.ts
 "use client";
 
 import type { Sale, Client } from "@/lib/types";

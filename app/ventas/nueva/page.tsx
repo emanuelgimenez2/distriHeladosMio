@@ -1,7 +1,7 @@
 // app/ventas/nueva/page.tsx
 "use client";
 
-import { useEffect, useState, memo, useRef } from "react";
+import { useEffect, useState, memo, useRef, useCallback } from "react";
 import React from "react";
 import { useRouter } from "next/navigation";
 import { MainLayout } from "@/components/layout/main-layout";
@@ -32,6 +32,7 @@ import {
   clientsApi,
   salesApi,
   sellersApi,
+  ordersApi,
 } from "@/lib/api";
 import type { Product, Client, CartItem, Seller } from "@/lib/types";
 import {
@@ -91,8 +92,12 @@ export default function NuevaVentaPage() {
     [key: string]: boolean;
   }>({});
 
-  const [deliveryMethod, setDeliveryMethod] = useState<"pickup" | "delivery">("pickup");
-  const [deliveryAddress, setDeliveryAddress] = useState<"saved" | "new">("saved");
+  const [deliveryMethod, setDeliveryMethod] = useState<"pickup" | "delivery">(
+    "pickup",
+  );
+  const [deliveryAddress, setDeliveryAddress] = useState<"saved" | "new">(
+    "saved",
+  );
   const [newAddress, setNewAddress] = useState("");
 
   const [newClientModalOpen, setNewClientModalOpen] = useState(false);
@@ -104,7 +109,12 @@ export default function NuevaVentaPage() {
     phone: "",
     email: "",
     creditLimit: 50000,
-    taxCategory: "consumidor_final" as "consumidor_final" | "monotributo" | "responsable_inscripto" | "exento" | "no_responsable",
+    taxCategory: "consumidor_final" as
+      | "consumidor_final"
+      | "monotributo"
+      | "responsable_inscripto"
+      | "exento"
+      | "no_responsable",
     address: "",
   });
 
@@ -124,6 +134,7 @@ export default function NuevaVentaPage() {
       setSellers(sellersData.filter((s) => s.isActive));
     } catch (error) {
       console.error("Error loading data:", error);
+      toast.error("Error al cargar los datos");
     } finally {
       setLoading(false);
     }
@@ -140,6 +151,8 @@ export default function NuevaVentaPage() {
               : item,
           ),
         );
+      } else {
+        toast.error("Stock insuficiente");
       }
     } else {
       setCart([...cart, { product, quantity: 1 }]);
@@ -152,7 +165,10 @@ export default function NuevaVentaPage() {
         if (item.product.id === productId) {
           const newQuantity = item.quantity + delta;
           if (newQuantity <= 0) return item;
-          if (newQuantity > item.product.stock) return item;
+          if (newQuantity > item.product.stock) {
+            toast.error("Stock insuficiente");
+            return item;
+          }
           return { ...item, quantity: newQuantity };
         }
         return item;
@@ -181,7 +197,7 @@ export default function NuevaVentaPage() {
     0,
   );
   const cartItemsCount = cart.reduce((acc, item) => acc + item.quantity, 0);
-  
+
   const creditAmount =
     paymentType === "mixed"
       ? creditAmountInput
@@ -221,7 +237,7 @@ export default function NuevaVentaPage() {
         setCreditAmountInput(cartTotal - cashAmount);
       }
     }
-  }, [paymentType, cartTotal]);
+  }, [paymentType, cartTotal, cashAmount]);
 
   const handleCashAmountChange = (value: number) => {
     const validValue = Math.max(0, Math.min(value, cartTotal));
@@ -241,7 +257,8 @@ export default function NuevaVentaPage() {
     if (!selectedClientData) return false;
 
     if (deliveryMethod === "delivery") {
-      if (deliveryAddress === "saved" && !selectedClientData.address) return false;
+      if (deliveryAddress === "saved" && !selectedClientData.address)
+        return false;
       if (deliveryAddress === "new" && !newAddress.trim()) return false;
     }
 
@@ -251,8 +268,10 @@ export default function NuevaVentaPage() {
       if (
         selectedClientData.currentBalance + amountToCredit >
         selectedClientData.creditLimit
-      )
+      ) {
+        toast.error("El cliente excede su límite de crédito");
         return false;
+      }
     }
     if (paymentType === "mixed" && cashAmount <= 0) return false;
     if (paymentType === "mixed" && cashAmount >= cartTotal) return false;
@@ -264,44 +283,88 @@ export default function NuevaVentaPage() {
     try {
       const resolvedClientPhone = clientPhone || selectedClientData?.phone;
       const resolvedClientName = selectedClientData?.name;
-      const resolvedAddress = deliveryMethod === "delivery"
-        ? (deliveryAddress === "saved" ? selectedClientData?.address : newAddress)
-        : "Retiro en local";
+      const resolvedAddress =
+        deliveryMethod === "delivery"
+          ? deliveryAddress === "saved"
+            ? selectedClientData?.address
+            : newAddress
+          : "Retiro en local";
 
-      const sale = await salesApi.processSale({
-        clientId: selectedClient,
-        clientName: resolvedClientName,
-        clientPhone: resolvedClientPhone,
-        sellerId:
-          selectedSeller && selectedSeller !== "none"
-            ? selectedSeller
-            : undefined,
-        sellerName: selectedSellerData?.name,
-        items: cart,
-        paymentType,
-        cashAmount:
-          paymentType === "mixed"
-            ? cashAmount
-            : paymentType === "cash"
-              ? cartTotal
+      // ✅ FLUJO CORREGIDO: Separar pedido de venta
+      if (deliveryMethod === "delivery") {
+        // 1️⃣ SOLO crear el pedido, NO la venta
+        const order = await ordersApi.createOrder({
+          clientId: selectedClient,
+          clientName: resolvedClientName || "Cliente",
+          sellerId:
+            selectedSeller !== "none" && selectedSeller
+              ? selectedSeller
               : undefined,
-        creditAmount:
-          paymentType === "mixed"
-            ? creditAmount
-            : paymentType === "credit"
-              ? cartTotal
+          sellerName: selectedSellerData?.name,
+          items: cart,
+          address: resolvedAddress || "Dirección no especificada",
+          status: "pending",
+          source: "direct_sale",
+        });
+
+        toast.success("✅ Pedido creado correctamente");
+
+        // 2️⃣ Limpiar carrito y redirigir a pedidos
+        setCart([]);
+        setSelectedClient("");
+        setSelectedSeller("");
+        setPaymentType("cash");
+        setCashAmount(0);
+        setCreditAmountInput(0);
+        setClientPhone("");
+        setDeliveryMethod("pickup");
+        setDeliveryAddress("saved");
+        setNewAddress("");
+
+        // Redirigir a pedidos para seguimiento
+        router.push("/pedidos");
+      } else {
+        // 🟢 Retiro en local: venta inmediata (sin pedido)
+        const sale = await salesApi.processSale({
+          clientId: selectedClient,
+          clientName: resolvedClientName,
+          clientPhone: resolvedClientPhone,
+          sellerId:
+            selectedSeller !== "none" && selectedSeller
+              ? selectedSeller
               : undefined,
-        source: "direct",
-        createOrder: deliveryMethod === "delivery",
-        deliveryMethod,
-        deliveryAddress: resolvedAddress,
-      });
-      setLastSaleId(sale.id);
-      setSaleComplete(true);
-      toast.success("Venta procesada correctamente");
+          sellerName: selectedSellerData?.name,
+          items: cart,
+          paymentType,
+          cashAmount:
+            paymentType === "mixed"
+              ? cashAmount
+              : paymentType === "cash"
+                ? cartTotal
+                : undefined,
+          creditAmount:
+            paymentType === "mixed"
+              ? creditAmountInput
+              : paymentType === "credit"
+                ? cartTotal
+                : undefined,
+          source: "direct",
+          createOrder: false, // ❌ NO crear pedido
+          deliveryMethod: "pickup",
+          deliveryAddress: "Retiro en local",
+        });
+
+        setLastSaleId(sale.id);
+        setSaleComplete(true);
+        toast.success("✅ Venta procesada correctamente");
+      }
     } catch (error) {
       console.error("Error processing sale:", error);
-      toast.error("Error al procesar la venta");
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Error al procesar la solicitud",
+      );
     } finally {
       setProcessing(false);
       setConfirmDialogOpen(false);
@@ -325,8 +388,12 @@ export default function NuevaVentaPage() {
   };
 
   const handleCreateNewClient = async () => {
-    if (!newClientForm.name.trim() || !newClientForm.cuit.trim()) {
-      toast.error("Nombre y CUIT son requeridos");
+    if (!newClientForm.name.trim()) {
+      toast.error("El nombre es requerido");
+      return;
+    }
+    if (!newClientForm.cuit.trim()) {
+      toast.error("El CUIT es requerido");
       return;
     }
 
@@ -335,11 +402,11 @@ export default function NuevaVentaPage() {
       const newClient = await clientsApi.create({
         name: newClientForm.name,
         cuit: newClientForm.cuit,
-        dni: newClientForm.dni,
-        phone: newClientForm.phone,
-        email: newClientForm.email,
+        dni: newClientForm.dni || undefined,
+        phone: newClientForm.phone || undefined,
+        email: newClientForm.email || undefined,
         creditLimit: newClientForm.creditLimit,
-        address: newClientForm.address,
+        address: newClientForm.address || undefined,
         taxCategory: newClientForm.taxCategory,
         notes: "",
       });
@@ -356,7 +423,7 @@ export default function NuevaVentaPage() {
         taxCategory: "consumidor_final",
         address: "",
       });
-      toast.success("Cliente creado correctamente");
+      toast.success("✅ Cliente creado correctamente");
     } catch (error) {
       console.error("Error creating client:", error);
       toast.error("Error al crear el cliente");
@@ -396,7 +463,6 @@ export default function NuevaVentaPage() {
           <div className="flex-1 overflow-y-auto space-y-2 pr-1 pb-3 max-h-[200px]">
             {cart.map((item) => {
               const remaining = getRemainingStock(item);
-              const isEditing = editingQuantity[item.product.id];
 
               return (
                 <div
@@ -587,11 +653,13 @@ export default function NuevaVentaPage() {
                   onClick={() => setDeliveryMethod("pickup")}
                 >
                   <Home className="h-4 w-4" />
-                  Retiro
+                  Retiro en local
                 </Button>
                 <Button
                   type="button"
-                  variant={deliveryMethod === "delivery" ? "default" : "outline"}
+                  variant={
+                    deliveryMethod === "delivery" ? "default" : "outline"
+                  }
                   className={cn(
                     "h-auto py-2 flex-col gap-1 text-xs font-medium transition-all",
                     deliveryMethod === "delivery" &&
@@ -599,8 +667,7 @@ export default function NuevaVentaPage() {
                   )}
                   onClick={() => setDeliveryMethod("delivery")}
                 >
-                  <Truck className="h-4 w-4" />
-                  A Enviar
+                  <Truck className="h-4 w-4" />A domicilio
                 </Button>
               </div>
             </div>
@@ -614,12 +681,16 @@ export default function NuevaVentaPage() {
                   {selectedClientData?.address && (
                     <Button
                       type="button"
-                      variant={deliveryAddress === "saved" ? "default" : "outline"}
+                      variant={
+                        deliveryAddress === "saved" ? "default" : "outline"
+                      }
                       className="w-full h-auto py-2 px-3 text-xs font-medium justify-start"
                       onClick={() => setDeliveryAddress("saved")}
                     >
                       <MapPin className="h-3.5 w-3.5 mr-2 shrink-0" />
-                      <span className="truncate text-left">{selectedClientData.address}</span>
+                      <span className="truncate text-left">
+                        {selectedClientData.address}
+                      </span>
                     </Button>
                   )}
                   <Button
@@ -699,7 +770,9 @@ export default function NuevaVentaPage() {
                   min="0"
                   max={cartTotal}
                   value={cashAmount}
-                  onChange={(e) => handleCashAmountChange(Number(e.target.value) || 0)}
+                  onChange={(e) =>
+                    handleCashAmountChange(Number(e.target.value) || 0)
+                  }
                   className="h-9 text-sm border-emerald-200 focus-visible:ring-emerald-500"
                 />
               </div>
@@ -715,7 +788,9 @@ export default function NuevaVentaPage() {
                   min="0"
                   max={cartTotal}
                   value={creditAmountInput}
-                  onChange={(e) => setCreditAmountInput(Number(e.target.value) || 0)}
+                  onChange={(e) =>
+                    setCreditAmountInput(Number(e.target.value) || 0)
+                  }
                   className="h-9 text-sm border-blue-200 focus-visible:ring-blue-500"
                 />
               </div>
@@ -732,7 +807,9 @@ export default function NuevaVentaPage() {
                     min="0"
                     max={cartTotal}
                     value={cashAmount}
-                    onChange={(e) => handleCashAmountChange(Number(e.target.value) || 0)}
+                    onChange={(e) =>
+                      handleCashAmountChange(Number(e.target.value) || 0)
+                    }
                     className="h-9 text-sm border-amber-200 focus-visible:ring-amber-500"
                   />
                 </div>
@@ -745,7 +822,9 @@ export default function NuevaVentaPage() {
                     min="0"
                     max={cartTotal}
                     value={creditAmountInput}
-                    onChange={(e) => handleCreditAmountChange(Number(e.target.value) || 0)}
+                    onChange={(e) =>
+                      handleCreditAmountChange(Number(e.target.value) || 0)
+                    }
                     className="h-9 text-sm border-amber-200 focus-visible:ring-amber-500"
                   />
                 </div>
@@ -759,7 +838,10 @@ export default function NuevaVentaPage() {
             )}
 
             <div className="space-y-2">
-              <Label htmlFor="phone-input" className="text-xs font-medium text-foreground">
+              <Label
+                htmlFor="phone-input"
+                className="text-xs font-medium text-foreground"
+              >
                 Teléfono (opcional)
               </Label>
               <Input
@@ -779,7 +861,9 @@ export default function NuevaVentaPage() {
               disabled={!canProcessSale()}
               onClick={() => setConfirmDialogOpen(true)}
             >
-              Procesar Venta
+              {deliveryMethod === "delivery"
+                ? "Crear Pedido"
+                : "Procesar Venta"}
             </Button>
           </div>
         </>
@@ -859,7 +943,9 @@ export default function NuevaVentaPage() {
                     <Button
                       variant="outline"
                       className="h-10 text-sm gap-2"
-                      onClick={() => router.push(`/ventas?saleId=${lastSaleId}`)}
+                      onClick={() =>
+                        router.push(`/ventas?saleId=${lastSaleId}`)
+                      }
                     >
                       <FileText className="h-4 w-4" />
                       Boleta
@@ -867,7 +953,9 @@ export default function NuevaVentaPage() {
                     <Button
                       variant="outline"
                       className="h-10 text-sm gap-2"
-                      onClick={() => router.push(`/ventas?saleId=${lastSaleId}`)}
+                      onClick={() =>
+                        router.push(`/ventas?saleId=${lastSaleId}`)
+                      }
                     >
                       <Receipt className="h-4 w-4" />
                       Remito
@@ -913,9 +1001,13 @@ export default function NuevaVentaPage() {
               <ArrowLeft className="h-4 w-4" />
             </Button>
             <div>
-              <h1 className="text-2xl font-bold text-foreground">Nueva Venta</h1>
+              <h1 className="text-2xl font-bold text-foreground">
+                Nueva Venta
+              </h1>
               <p className="text-sm text-muted-foreground">
-                Registra una nueva venta
+                {deliveryMethod === "delivery"
+                  ? "Crear pedido para envío a domicilio"
+                  : "Registra una venta en mostrador"}
               </p>
             </div>
           </div>
@@ -986,14 +1078,18 @@ export default function NuevaVentaPage() {
                 </h3>
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
                   {enabledProducts.map((product) => {
-                    const inCart = cart.find((item) => item.product.id === product.id);
+                    const inCart = cart.find(
+                      (item) => item.product.id === product.id,
+                    );
 
                     return (
                       <Card
                         key={product.id}
                         className={cn(
                           "group cursor-pointer transition-all duration-200 hover:shadow-lg border-2 overflow-hidden",
-                          product.stock === 0 ? "opacity-40 cursor-not-allowed" : "",
+                          product.stock === 0
+                            ? "opacity-40 cursor-not-allowed"
+                            : "",
                           inCart
                             ? "border-primary ring-2 ring-primary/20 shadow-md"
                             : "border-transparent hover:border-border",
@@ -1022,7 +1118,10 @@ export default function NuevaVentaPage() {
                             )}
                             {product.stock === 0 && (
                               <div className="absolute inset-0 bg-background/90 backdrop-blur-sm flex items-center justify-center">
-                                <Badge variant="secondary" className="text-xs font-medium">
+                                <Badge
+                                  variant="secondary"
+                                  className="text-xs font-medium"
+                                >
                                   Sin stock
                                 </Badge>
                               </div>
@@ -1058,14 +1157,18 @@ export default function NuevaVentaPage() {
                 </h3>
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
                   {disabledProducts.map((product) => {
-                    const inCart = cart.find((item) => item.product.id === product.id);
+                    const inCart = cart.find(
+                      (item) => item.product.id === product.id,
+                    );
 
                     return (
                       <Card
                         key={product.id}
                         className={cn(
                           "group cursor-pointer transition-all duration-200 hover:shadow-lg border-2 overflow-hidden opacity-60 border-dashed",
-                          product.stock === 0 ? "opacity-40 cursor-not-allowed" : "",
+                          product.stock === 0
+                            ? "opacity-40 cursor-not-allowed"
+                            : "",
                           inCart
                             ? "border-primary ring-2 ring-primary/20 shadow-md"
                             : "border-transparent hover:border-border",
@@ -1103,7 +1206,10 @@ export default function NuevaVentaPage() {
                             )}
                             {product.stock === 0 && (
                               <div className="absolute inset-0 bg-background/90 backdrop-blur-sm flex items-center justify-center">
-                                <Badge variant="secondary" className="text-xs font-medium">
+                                <Badge
+                                  variant="secondary"
+                                  className="text-xs font-medium"
+                                >
                                   Sin stock
                                 </Badge>
                               </div>
@@ -1183,15 +1289,27 @@ export default function NuevaVentaPage() {
       <ConfirmDialog
         open={confirmDialogOpen}
         onOpenChange={setConfirmDialogOpen}
-        title="Confirmar Venta"
-        description={`¿Procesar venta por ${formatCurrency(cartTotal)}${
-          paymentType === "cash"
-            ? " en efectivo"
-            : paymentType === "credit"
-              ? ` a cuenta de ${selectedClientData?.name || "cliente"}`
-              : ` (${formatCurrency(cashAmount)} efectivo + ${formatCurrency(creditAmount)} a cuenta)`
-        }${selectedSellerData ? ` - Vendedor: ${selectedSellerData.name}` : ""}${deliveryMethod === "delivery" ? " - A Enviar" : " - Retiro en local"}?`}
-        confirmText={processing ? "Procesando..." : "Confirmar"}
+        title={
+          deliveryMethod === "delivery" ? "Confirmar Pedido" : "Confirmar Venta"
+        }
+        description={
+          deliveryMethod === "delivery"
+            ? `¿Crear pedido por ${formatCurrency(cartTotal)} para envío a domicilio?`
+            : `¿Procesar venta por ${formatCurrency(cartTotal)}${
+                paymentType === "cash"
+                  ? " en efectivo"
+                  : paymentType === "credit"
+                    ? ` a cuenta de ${selectedClientData?.name || "cliente"}`
+                    : ` (${formatCurrency(cashAmount)} efectivo + ${formatCurrency(creditAmount)} a cuenta)`
+              }${selectedSellerData ? ` - Vendedor: ${selectedSellerData.name}` : ""}?`
+        }
+        confirmText={
+          processing
+            ? "Procesando..."
+            : deliveryMethod === "delivery"
+              ? "Crear Pedido"
+              : "Confirmar"
+        }
         confirmDisabled={processing}
         onConfirm={handleProcessSale}
       />
@@ -1215,17 +1333,23 @@ export default function NuevaVentaPage() {
               <h3 className="text-sm font-semibold text-foreground border-b pb-2">
                 Datos Principales
               </h3>
-              
+
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-2">
-                  <Label htmlFor="newClientName" className="text-sm font-medium">
+                  <Label
+                    htmlFor="newClientName"
+                    className="text-sm font-medium"
+                  >
                     Nombre <span className="text-destructive">*</span>
                   </Label>
                   <Input
                     id="newClientName"
                     value={newClientForm.name}
                     onChange={(e) =>
-                      setNewClientForm({ ...newClientForm, name: e.target.value })
+                      setNewClientForm({
+                        ...newClientForm,
+                        name: e.target.value,
+                      })
                     }
                     placeholder="Nombre del cliente"
                     className="h-10 text-sm"
@@ -1233,14 +1357,20 @@ export default function NuevaVentaPage() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="newClientCuit" className="text-sm font-medium">
+                  <Label
+                    htmlFor="newClientCuit"
+                    className="text-sm font-medium"
+                  >
                     CUIT <span className="text-destructive">*</span>
                   </Label>
                   <Input
                     id="newClientCuit"
                     value={newClientForm.cuit}
                     onChange={(e) =>
-                      setNewClientForm({ ...newClientForm, cuit: e.target.value })
+                      setNewClientForm({
+                        ...newClientForm,
+                        cuit: e.target.value,
+                      })
                     }
                     placeholder="20-12345678-9"
                     className="h-10 text-sm"
@@ -1265,9 +1395,11 @@ export default function NuevaVentaPage() {
 
               <div className="space-y-2">
                 <Label className="text-sm font-medium">Categoría Fiscal</Label>
-                <Select 
-                  value={newClientForm.taxCategory} 
-                  onValueChange={(value: any) => setNewClientForm({ ...newClientForm, taxCategory: value })}
+                <Select
+                  value={newClientForm.taxCategory}
+                  onValueChange={(value: any) =>
+                    setNewClientForm({ ...newClientForm, taxCategory: value })
+                  }
                 >
                   <SelectTrigger className="h-10 text-sm">
                     <SelectValue placeholder="Seleccionar categoría" />
@@ -1279,7 +1411,10 @@ export default function NuevaVentaPage() {
                     <SelectItem value="monotributo" className="text-sm">
                       Monotributista
                     </SelectItem>
-                    <SelectItem value="responsable_inscripto" className="text-sm">
+                    <SelectItem
+                      value="responsable_inscripto"
+                      className="text-sm"
+                    >
                       Responsable Inscripto
                     </SelectItem>
                     <SelectItem value="exento" className="text-sm">
@@ -1300,7 +1435,10 @@ export default function NuevaVentaPage() {
 
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-2">
-                  <Label htmlFor="newClientPhone" className="text-sm font-medium">
+                  <Label
+                    htmlFor="newClientPhone"
+                    className="text-sm font-medium"
+                  >
                     Teléfono
                   </Label>
                   <Input
@@ -1320,7 +1458,10 @@ export default function NuevaVentaPage() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="newClientEmail" className="text-sm font-medium">
+                  <Label
+                    htmlFor="newClientEmail"
+                    className="text-sm font-medium"
+                  >
                     Email
                   </Label>
                   <Input
@@ -1341,7 +1482,10 @@ export default function NuevaVentaPage() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="newClientAddress" className="text-sm font-medium">
+                <Label
+                  htmlFor="newClientAddress"
+                  className="text-sm font-medium"
+                >
                   Dirección
                 </Label>
                 <Textarea

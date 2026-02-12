@@ -1,3 +1,4 @@
+//components\pedidos\order-card.tsx
 "use client";
 
 import React from "react";

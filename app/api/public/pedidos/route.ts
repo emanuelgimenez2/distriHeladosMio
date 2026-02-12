@@ -1,3 +1,4 @@
+//app\api\public\pedidos\route.ts
 import { NextResponse } from 'next/server'
 import { adminDb } from '@/lib/firebase-admin'
 

@@ -1,3 +1,4 @@
+//components\pedidos\success-modal.tsx
 "use client";
 
 import React from "react";

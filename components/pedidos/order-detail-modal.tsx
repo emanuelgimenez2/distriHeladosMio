@@ -1,3 +1,4 @@
+//components\pedidos\order-detail-modal.tsx
 "use client";
 
 import React from "react";
