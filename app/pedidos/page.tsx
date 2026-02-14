@@ -18,53 +18,7 @@ import { OrderCard } from "@/components/pedidos/order-card";
 import { OrderDetailModal } from "@/components/pedidos/order-detail-modal";
 import { PaymentModal } from "@/components/pedidos/payment-modal";
 import { SuccessModal } from "@/components/pedidos/success-modal";
-
-export const statusConfig: Record<
-  OrderStatus,
-  {
-    label: string;
-    color: string;
-    dotColor: string;
-    bgColor: string;
-    borderColor: string;
-  }
-> = {
-  pending: {
-    label: "Pendiente",
-    color: "text-amber-700",
-    dotColor: "bg-amber-500",
-    bgColor: "bg-amber-50",
-    borderColor: "border-amber-200",
-  },
-  preparation: {
-    label: "Preparación",
-    color: "text-blue-700",
-    dotColor: "bg-blue-500",
-    bgColor: "bg-blue-50",
-    borderColor: "border-blue-200",
-  },
-  delivery: {
-    label: "En Reparto",
-    color: "text-orange-700",
-    dotColor: "bg-orange-500",
-    bgColor: "bg-orange-50",
-    borderColor: "border-orange-200",
-  },
-  completed: {
-    label: "Completado",
-    color: "text-green-700",
-    dotColor: "bg-green-500",
-    bgColor: "bg-green-50",
-    borderColor: "border-green-200",
-  },
-};
-
-export const statusFlow: OrderStatus[] = [
-  "pending",
-  "preparation",
-  "delivery",
-  "completed",
-];
+import { statusConfig, statusFlow } from "@/lib/order-constants"; //
 
 export const generateOrderNumber = (date: Date, index: number) => {
   const d = new Date(date);
@@ -241,8 +195,8 @@ export default function PedidosPage() {
           product: {
             id: item.productId,
             name: item.name,
-            price: 2500,
-            stock: 100,
+            price: item.price, // ⚠️ Usa el precio real, no 2500 fijo
+            stock: 100, // ⚠️ Esto también debería venir del producto real
             description: "",
             imageUrl: "",
             category: "",
@@ -254,6 +208,10 @@ export default function PedidosPage() {
         source: "order",
         createOrder: false,
         orderId: selectedOrder.id,
+        // 👇 NUEVOS CAMPOS
+        deliveryMethod:
+          selectedOrder.address === "Retiro en local" ? "pickup" : "delivery",
+        deliveryAddress: selectedOrder.address,
       });
 
       if (paymentType === "split" && client && normalizedCashAmount > 0) {

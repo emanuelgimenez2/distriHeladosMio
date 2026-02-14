@@ -1,367 +1,989 @@
-// hooks/useVentas.ts - AGREGAR estas funciones faltantes
 "use client";
 
-import { useState, useEffect, useMemo, useCallback } from "react";
-import { salesApi, remitoApi, clientsApi } from "@/lib/api";
-import type { Sale, Client } from "@/lib/types";
-import type { Venta, FiltrosVentas } from "../types";
+import { useState, useEffect, useCallback } from "react";
+import {
+  collection,
+  query,
+  orderBy,
+  getDocs,
+  doc,
+  getDoc,
+  updateDoc,
+  serverTimestamp,
+  where,
+  limit,
+} from "firebase/firestore";
+import { db } from "@/lib/firebase";
+import { savePdfToDatabase, downloadBase64Pdf } from "@/services/pdf-service";
 import { toast } from "sonner";
+import { getAuth } from "firebase/auth";
+
+// Tipos
+export interface VentaItem {
+  name: string;
+  quantity: number;
+  price: number;
+}
+
+export interface Venta {
+  id: string;
+  clientId?: string;
+  clientName?: string;
+  clientPhone?: string;
+  clientAddress?: string;
+  clientCuit?: string;
+  clientTaxCategory?: string;
+  items: VentaItem[];
+  total: number;
+  paymentType: "cash" | "credit" | "mixed";
+  cashAmount?: number;
+  creditAmount?: number;
+  createdAt: any;
+  invoiceNumber?: string;
+  invoiceEmitted?: boolean;
+  afipData?: {
+    cae?: string;
+    caeVencimiento?: string;
+    tipoComprobante?: number;
+    puntoVenta?: number;
+    numeroComprobante?: number;
+  };
+  remitoNumber?: string;
+  remitoPdfBase64?: string;
+  invoicePdfBase64?: string;
+  sellerName?: string;
+  saleNumber?: number;
+  deliveryAddress?: string;
+  clientData?: {
+    name?: string;
+    phone?: string;
+    cuit?: string;
+    address?: string;
+    taxCategory?: string;
+  };
+}
+
+interface FiltrosVentas {
+  busqueda: string;
+  fechaDesde: string;
+  fechaHasta: string;
+  tipoPago: string;
+}
+
+// Funciones seguras de formato
+const safeFormatDate = (date: any): string => {
+  if (!date) return "-";
+  try {
+    let d: Date;
+    if (date?.toDate) d = date.toDate();
+    else if (typeof date === "string") d = new Date(date);
+    else if (typeof date === "number") d = new Date(date);
+    else if (date instanceof Date) d = date;
+    else if (date?.seconds) d = new Date(date.seconds * 1000);
+    else return "-";
+    if (isNaN(d.getTime())) return "-";
+    return d.toLocaleDateString("es-AR", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+    });
+  } catch {
+    return "-";
+  }
+};
+
+const safeFormatDateTime = (date: any): string => {
+  if (!date) return "-";
+  try {
+    let d: Date;
+    if (date?.toDate) d = date.toDate();
+    else if (typeof date === "string") d = new Date(date);
+    else if (typeof date === "number") d = new Date(date);
+    else if (date instanceof Date) d = date;
+    else if (date?.seconds) d = new Date(date.seconds * 1000);
+    else return "-";
+    if (isNaN(d.getTime())) return "-";
+    return d.toLocaleString("es-AR", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  } catch {
+    return "-";
+  }
+};
+
+const safeGetDate = (date: any): Date | null => {
+  if (!date) return null;
+  try {
+    let d: Date;
+    if (date?.toDate) d = date.toDate();
+    else if (typeof date === "string") d = new Date(date);
+    else if (typeof date === "number") d = new Date(date);
+    else if (date instanceof Date) d = date;
+    else if (date?.seconds) d = new Date(date.seconds * 1000);
+    else return null;
+    return isNaN(d.getTime()) ? null : d;
+  } catch {
+    return null;
+  }
+};
 
 export function useVentas() {
-  // Estados
   const [ventas, setVentas] = useState<Venta[]>([]);
   const [cargando, setCargando] = useState(true);
   const [filtros, setFiltros] = useState<FiltrosVentas>({
-    searchQuery: "",
-    invoiceFilter: "all",
-    paymentFilter: "all",
-    periodFilter: "today",
+    busqueda: "",
+    fechaDesde: "",
+    fechaHasta: "",
+    tipoPago: "todos",
   });
 
-  // Estados para modales
   const [modalDetalleAbierto, setModalDetalleAbierto] = useState(false);
   const [ventaSeleccionada, setVentaSeleccionada] = useState<Venta | null>(null);
-
   const [modalEmitirAbierto, setModalEmitirAbierto] = useState(false);
   const [ventaParaEmitir, setVentaParaEmitir] = useState<Venta | null>(null);
-  const [tipoDocumento, setTipoDocumento] = useState<"invoice" | "remito">("invoice");
+  const [tipoDocumento, setTipoDocumento] = useState<"boleta" | "remito">("boleta");
   const [emitiendo, setEmitiendo] = useState(false);
 
-  // Cargar datos - FILTRAR SOLO VENTAS COMPLETADAS (no pedidos pendientes)
-  const cargarDatos = useCallback(async () => {
+  // Cargar ventas
+  const cargarVentas = useCallback(async () => {
     try {
-      const ventasData = await salesApi.getAll();
-      
-      // IMPORTANTE: Filtrar solo ventas que NO sean pedidos pendientes
-      // Las ventas de pedidos completados tienen orderId y source === "order"
-      // pero debemos asegurar que solo se muestren si el pedido está completado
-      // En la práctica, las ventas con source === "order" solo se crean cuando 
-      // el pedido se completa, así que deberían estar filtradas por el backend
-      
-      const ventasMejoradas = ventasData
-        .filter((venta: Sale) => {
-          // Si es una venta directa (no de pedido), siempre mostrar
-          if (venta.source === "direct" || !venta.source) return true;
-          
-          // Si es de pedido, solo mostrar si el pedido está completado
-          // Esto se maneja en el backend, pero double-check aquí
-          return true; // Asumimos que el backend ya filtró
-        })
-        .map((venta: Sale, index: number, array: Sale[]) => ({
-          ...venta,
-          saleNumber: array.length - index,
-          cashAmount: venta.paymentType === "mixed" ? Math.floor(venta.total * 0.6) : undefined,
-          creditAmount: venta.paymentType === "mixed" ? Math.floor(venta.total * 0.4) : undefined,
-        }));
-      
-      setVentas(ventasMejoradas);
+      setCargando(true);
+      const q = query(collection(db, "ventas"), orderBy("createdAt", "desc"));
+      const snapshot = await getDocs(q);
+      const ventasData = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      })) as Venta[];
+      setVentas(ventasData);
     } catch (error) {
       console.error("Error cargando ventas:", error);
-      toast.error("Error al cargar las ventas");
+      toast.error("Error al cargar ventas");
     } finally {
       setCargando(false);
     }
   }, []);
 
   useEffect(() => {
-    cargarDatos();
-  }, [cargarDatos]);
+    cargarVentas();
+  }, [cargarVentas]);
 
-  // Actualizar venta seleccionada si cambia en la lista
-  useEffect(() => {
-    if (!ventaSeleccionada) return;
-    const actualizada = ventas.find((v) => v.id === ventaSeleccionada.id);
-    if (actualizada) {
-      setVentaSeleccionada(actualizada);
+  // Filtrado
+  const ventasFiltradas = ventas.filter((venta) => {
+    const coincideBusqueda =
+      !filtros.busqueda ||
+      venta.clientName?.toLowerCase().includes(filtros.busqueda.toLowerCase()) ||
+      venta.id.toLowerCase().includes(filtros.busqueda.toLowerCase()) ||
+      venta.invoiceNumber?.includes(filtros.busqueda);
+
+    let coincideFechaDesde = true;
+    let coincideFechaHasta = true;
+
+    if (filtros.fechaDesde) {
+      const ventaDate = safeGetDate(venta.createdAt);
+      const desdeDate = new Date(filtros.fechaDesde);
+      coincideFechaDesde = ventaDate ? ventaDate >= desdeDate : false;
     }
-  }, [ventas, ventaSeleccionada]);
 
-  // Helpers de formato
-  const formatearFechaInput = (fecha: Date) => {
-    const year = fecha.getFullYear();
-    const month = String(fecha.getMonth() + 1).padStart(2, "0");
-    const day = String(fecha.getDate()).padStart(2, "0");
-    return `${year}-${month}-${day}`;
-  };
-
-  const formatearMoneda = (monto: number) =>
-    new Intl.NumberFormat("es-AR", {
-      style: "currency",
-      currency: "ARS",
-      minimumFractionDigits: 0,
-    }).format(monto);
-
-  const formatearFecha = (fecha: Date) =>
-    new Intl.DateTimeFormat("es-AR", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-    }).format(new Date(fecha));
-
-  const formatearFechaHora = (fecha: Date) =>
-    new Intl.DateTimeFormat("es-AR", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    }).format(new Date(fecha));
-
-  const formatearHora = (fecha: Date) =>
-    new Intl.DateTimeFormat("es-AR", {
-      hour: "2-digit",
-      minute: "2-digit",
-    }).format(new Date(fecha));
-
-  // Helpers de pago
-  const etiquetaPago = (tipo: string) => {
-    if (tipo === "cash") return "Contado";
-    if (tipo === "credit") return "Cta. Corriente";
-    if (tipo === "mixed") return "Mixto";
-    return tipo;
-  };
-
-  const claseBadgePago = (tipo: string) => {
-    if (tipo === "cash")
-      return "bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-400 dark:border-emerald-800";
-    if (tipo === "credit")
-      return "bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-900/30 dark:text-blue-400 dark:border-blue-800";
-    if (tipo === "mixed")
-      return "bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-800";
-    return "";
-  };
-
-  // Filtros de fecha
-  const obtenerRangoFecha = (periodo: string) => {
-    const hoy = new Date();
-    const hoyStr = formatearFechaInput(hoy);
-    switch (periodo) {
-      case "today":
-        return { from: hoyStr, to: hoyStr };
-      case "week": {
-        const d = new Date(hoy);
-        d.setDate(d.getDate() - 7);
-        return { from: formatearFechaInput(d), to: hoyStr };
-      }
-      case "month": {
-        const d = new Date(hoy);
-        d.setMonth(d.getMonth() - 1);
-        return { from: formatearFechaInput(d), to: hoyStr };
-      }
-      default:
-        return { from: hoyStr, to: hoyStr };
+    if (filtros.fechaHasta) {
+      const ventaDate = safeGetDate(venta.createdAt);
+      const hastaDate = new Date(filtros.fechaHasta);
+      hastaDate.setHours(23, 59, 59, 999);
+      coincideFechaHasta = ventaDate ? ventaDate <= hastaDate : false;
     }
+
+    const coincideTipoPago =
+      filtros.tipoPago === "todos" || venta.paymentType === filtros.tipoPago;
+
+    return coincideBusqueda && coincideFechaDesde && coincideFechaHasta && coincideTipoPago;
+  });
+
+  const actualizarFiltros = (nuevosFiltros: Partial<FiltrosVentas>) => {
+    setFiltros((prev) => ({ ...prev, ...nuevosFiltros }));
   };
 
-  // Ventas filtradas
-  const ventasFiltradas = useMemo(() => {
-    const { from, to } = obtenerRangoFecha(filtros.periodFilter);
-    return ventas
-      .filter((venta) => {
-        const q = filtros.searchQuery.toLowerCase();
-        const coincideBusqueda =
-          venta.id.toLowerCase().includes(q) ||
-          (venta.clientName?.toLowerCase().includes(q) ?? false) ||
-          (venta.sellerName?.toLowerCase().includes(q) ?? false);
-        const coincideBoleta =
-          filtros.invoiceFilter === "all" ||
-          (filtros.invoiceFilter === "emitted" && venta.invoiceEmitted) ||
-          (filtros.invoiceFilter === "pending" && !venta.invoiceEmitted);
-        const coincidePago =
-          filtros.paymentFilter === "all" || venta.paymentType === filtros.paymentFilter;
-        const valor = new Date(venta.createdAt);
-        const inicio = from ? new Date(`${from}T00:00:00`) : null;
-        const fin = to ? new Date(`${to}T23:59:59`) : null;
-        const coincideFecha = (!inicio || valor >= inicio) && (!fin || valor <= fin);
-        return coincideBusqueda && coincideBoleta && coincidePago && coincideFecha;
-      })
-      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-  }, [ventas, filtros]);
-
-  // Handlers de modales
-  const abrirDetalle = useCallback((venta: Venta) => {
+  // Modales
+  const abrirDetalle = (venta: Venta) => {
     setVentaSeleccionada(venta);
     setModalDetalleAbierto(true);
-  }, []);
+  };
 
-  // FUNCIÓN FALTANTE - abrirDetallePorId
-  const abrirDetallePorId = useCallback((ventaId: string) => {
-    const venta = ventas.find((v) => v.id === ventaId);
-    if (venta) {
-      setVentaSeleccionada(venta);
-      setModalDetalleAbierto(true);
-    } else {
-      // Si no está en la lista cargada, intentar buscar en el backend
-      toast.error("Venta no encontrada en la lista actual");
-    }
-  }, [ventas]);
-
-  const cerrarDetalle = useCallback(() => {
+  const cerrarDetalle = () => {
     setModalDetalleAbierto(false);
-    // Delay para evitar problemas de DOM
-    setTimeout(() => {
-      setVentaSeleccionada(null);
-    }, 100);
+    setVentaSeleccionada(null);
+  };
+
+  const abrirDetallePorId = useCallback(async (saleId: string) => {
+    try {
+      const docRef = doc(db, "ventas", saleId);
+      const docSnap = await getDoc(docRef);
+      if (docSnap.exists()) {
+        const venta = { id: docSnap.id, ...docSnap.data() } as Venta;
+        abrirDetalle(venta);
+      }
+    } catch (error) {
+      console.error("Error abriendo detalle:", error);
+    }
   }, []);
 
-  const abrirEmitir = useCallback((venta: Venta) => {
+  const abrirEmitir = (venta: Venta, tipo: "boleta" | "remito" = "boleta") => {
     setVentaParaEmitir(venta);
-    setTipoDocumento(venta.invoiceEmitted ? "remito" : "invoice");
+    setTipoDocumento(tipo);
     setModalEmitirAbierto(true);
-  }, []);
+  };
 
-  const cerrarEmitir = useCallback(() => {
+  const cerrarEmitir = () => {
     setModalEmitirAbierto(false);
-    setTimeout(() => {
-      setVentaParaEmitir(null);
-    }, 100);
-  }, []);
+    setVentaParaEmitir(null);
+    setEmitiendo(false);
+  };
 
-  // Emitir documento
-  const emitirDocumento = useCallback(async () => {
+  // ==================== GENERACIÓN DE PDF ====================
+  const generarPdfCompleto = async (
+    venta: Venta,
+    tipo: "boleta" | "remito",
+    afipData?: any
+  ): Promise<string> => {
+    console.log(`📄 Generando PDF ${tipo} para venta ${venta.id}`);
+
+    try {
+      // Construir el HTML completo del documento
+      const htmlContent = tipo === "boleta" 
+        ? generarHtmlBoleta(venta, afipData)
+        : generarHtmlRemito(venta);
+
+      console.log(`📄 HTML generado, longitud: ${htmlContent.length} caracteres`);
+
+      // Llamar a la API que usa Puppeteer (server-side)
+      const response = await fetch("/api/generate-pdf", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ 
+          html: htmlContent,
+          filename: tipo === "boleta" 
+            ? `boleta-${venta.invoiceNumber || venta.id}.pdf`
+            : `remito-${venta.remitoNumber || venta.id}.pdf`
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: "Error desconocido" }));
+        throw new Error(errorData.error || `Error HTTP ${response.status}`);
+      }
+
+      const data = await response.json();
+      
+      if (!data.pdf) {
+        throw new Error("La API no devolvió el PDF");
+      }
+
+      console.log(`✅ PDF ${tipo} generado correctamente, tamaño: ${data.pdf.length} caracteres`);
+      console.log(`🔍 Primeros 100 caracteres del base64: ${data.pdf.substring(0, 100)}`);
+      console.log(`🔍 Últimos 20 caracteres del base64: ${data.pdf.substring(data.pdf.length - 20)}`);
+
+      // Validar que sea base64 válido antes de devolverlo
+      const base64Regex = /^[A-Za-z0-9+/]*={0,2}$/;
+      if (!base64Regex.test(data.pdf)) {
+        console.error("❌ El PDF recibido no es base64 válido");
+        console.error("🔍 Caracteres inválidos encontrados");
+        throw new Error("El PDF recibido de la API no es base64 válido");
+      }
+
+      return data.pdf; // Base64 string
+
+    } catch (error: any) {
+      console.error(`❌ Error generando PDF ${tipo}:`, error);
+      throw new Error(`Error al generar PDF: ${error.message}`);
+    }
+  };
+
+  // Función para generar HTML de boleta
+  const generarHtmlBoleta = (venta: Venta, afipData?: any): string => {
+    const isElectronica = !!afipData?.cae;
+    const items = venta.items || [];
+    
+    const formatCurrency = (amount: number) =>
+      new Intl.NumberFormat("es-AR", {
+        style: "currency",
+        currency: "ARS",
+        minimumFractionDigits: 2,
+      }).format(amount || 0);
+
+    const getTaxCategoryLabel = (category?: string) => {
+      const categories: Record<string, string> = {
+        responsable_inscripto: "Responsable Inscripto",
+        monotributo: "Monotributo",
+        consumidor_final: "Consumidor Final",
+        exento: "Exento",
+        no_responsable: "No Responsable",
+      };
+      return categories[category || ""] || "Consumidor Final";
+    };
+
+    const getPaymentTypeLabel = (type: string) => {
+      const types: Record<string, string> = {
+        cash: "Contado",
+        credit: "Cuenta Corriente",
+        mixed: "Contado y Cuenta Corriente",
+      };
+      return types[type] || type;
+    };
+
+    const pv = venta.invoiceNumber?.split("-")[0] || "0001";
+    const nro = venta.invoiceNumber?.split("-")[1] || "00000000";
+
+    const itemsHtml = items
+      .map(
+        (item) => `
+      <tr>
+        <td class="text-center">${item.quantity}</td>
+        <td>${item.name}</td>
+        <td class="text-right">${formatCurrency(item.price)}</td>
+        <td class="text-right">21.00</td>
+        <td class="text-right">${formatCurrency(item.price * item.quantity)}</td>
+      </tr>
+    `
+      )
+      .join("");
+
+    const emptyRows = Array.from({ length: Math.max(0, 10 - items.length) })
+      .map(
+        () => `
+      <tr><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td></tr>
+    `
+      )
+      .join("");
+
+    const mixedPaymentHtml =
+      venta.paymentType === "mixed"
+        ? `
+      <div style="border-top: 1px dashed #000000; padding-top: 8px; margin-top: 8px; font-size: 12px;">
+        <div style="display: flex; justify-content: space-between;">
+          <span>Efectivo:</span>
+          <span>${formatCurrency(venta.cashAmount || 0)}</span>
+        </div>
+        <div style="display: flex; justify-content: space-between;">
+          <span>A Cuenta:</span>
+          <span>${formatCurrency(venta.creditAmount || 0)}</span>
+        </div>
+      </div>
+    `
+        : "";
+
+    const electronicHtml = isElectronica
+      ? `
+      <div class="border-box p-4">
+        <div class="grid-2">
+          <div>
+            <p style="font-size: 9px;">
+              <strong>CAE N:</strong> ${afipData.cae || "N/A"}<br>
+              <strong>Fecha de Vto. de CAE:</strong> ${afipData.caeVencimiento ? safeFormatDate(afipData.caeVencimiento) : "-"}
+            </p>
+          </div>
+          <div style="display: flex; justify-content: flex-end;">
+            <div class="qr-box">
+              ${afipData.cae ? `<img src="https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=CAE:${afipData.cae}" alt="QR" style="width: 100%; height: 100%;">` : "QR AFIP"}
+            </div>
+          </div>
+        </div>
+      </div>
+    `
+      : `
+      <div class="border-box p-4 text-center">
+        <p style="font-weight: bold; color: #dc2626; font-size: 14px;">DOCUMENTO NO VALIDO COMO FACTURA</p>
+        <p style="font-size: 9px; color: #6b7280;">Este documento es un presupuesto. Solicite factura electrónica si la requiere.</p>
+      </div>
+    `;
+
+    const footerHtml = isElectronica
+      ? `
+      <p>Comprobante autorizado por AFIP</p>
+      <p>Esta factura contribuye al desarrollo del pais. El pago de los impuestos es obligacion de todos.</p>
+    `
+      : `
+      <p>Documento interno - No válido fiscalmente</p>
+    `;
+
+    return `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: monospace;
+      font-size: 11px;
+      line-height: 1.4;
+      color: black;
+      background: white;
+      padding: 10mm;
+      width: 210mm;
+      min-height: 297mm;
+    }
+    .border-box { border: 2px solid black; margin-bottom: 16px; }
+    .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); }
+    .grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
+    .border-r { border-right: 2px solid black; }
+    .p-4 { padding: 16px; }
+    .text-center { text-align: center; }
+    .text-right { text-align: right; }
+    .doc-type-box {
+      border: 2px solid black;
+      width: 64px;
+      height: 64px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 32px;
+      font-weight: bold;
+      margin: 0 auto 8px;
+    }
+    table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+    th, td { padding: 8px; border: 1px solid black; }
+    thead { background: #f0f0f0; }
+    th { font-weight: bold; text-align: left; }
+    .qr-box {
+      border: 2px solid black;
+      width: 96px;
+      height: 96px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 10px;
+    }
+    .totals-box { width: 256px; margin-left: auto; }
+  </style>
+</head>
+<body>
+  <div class="border-box">
+    <div class="grid-3">
+      <div class="p-4 border-r">
+        <h1 style="font-size: 20px; font-weight: bold; margin-bottom: 8px;">HELADOS MIO</h1>
+        <p style="font-size: 9px; line-height: 1.6;">
+          Razon Social: HELADOS MIO S.R.L.<br>
+          Domicilio Comercial: Av. Principal 1234<br>
+          Localidad: Buenos Aires<br>
+          Condicion frente al IVA: Responsable Inscripto
+        </p>
+      </div>
+      <div class="p-4 border-r text-center">
+        <div class="doc-type-box">${isElectronica ? "B" : "X"}</div>
+        <p style="font-size: 9px;">
+          ${isElectronica ? "Codigo 006" : "Documento No Valido como Factura"}<br>
+          ${isElectronica ? "FACTURA" : "PRESUPUESTO"}
+        </p>
+      </div>
+      <div class="p-4">
+        <p style="font-size: 18px; font-weight: bold; margin-bottom: 8px;">
+          Punto de Venta: ${pv}<br>
+          Comp. Nro: ${nro}
+        </p>
+        <p style="font-size: 9px; line-height: 1.6;">
+          Fecha de Emision: ${safeFormatDate(venta.createdAt)}<br>
+          CUIT: 30-12345678-9<br>
+          Ingresos Brutos: 12345678<br>
+          Inicio de Actividades: 01/01/2020
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <div class="border-box p-4">
+    <div class="grid-2">
+      <div>
+        <p><strong>CUIT:</strong> ${venta.clientCuit || venta.clientData?.cuit || "00-00000000-0"}</p>
+        <p><strong>Condicion frente al IVA:</strong> ${getTaxCategoryLabel(venta.clientTaxCategory || venta.clientData?.taxCategory)}</p>
+      </div>
+      <div>
+        <p><strong>Apellido y Nombre / Razon Social:</strong></p>
+        <p>${venta.clientName || venta.clientData?.name || "Consumidor Final"}</p>
+      </div>
+    </div>
+    <div class="grid-2" style="margin-top: 8px;">
+      <p><strong>Domicilio:</strong> ${venta.clientAddress || venta.clientData?.address || "-"}</p>
+      <p><strong>Condicion de venta:</strong> ${getPaymentTypeLabel(venta.paymentType)}</p>
+    </div>
+  </div>
+
+  <div class="border-box">
+    <table>
+      <thead>
+        <tr>
+          <th style="width: 80px;">Cantidad</th>
+          <th>Descripcion</th>
+          <th style="width: 100px;" class="text-right">Precio Unit.</th>
+          <th style="width: 80px;" class="text-right">% IVA</th>
+          <th style="width: 100px;" class="text-right">Subtotal</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${itemsHtml}
+        ${emptyRows}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="border-box p-4">
+    <div class="totals-box">
+      <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+        <span>Subtotal:</span>
+        <span>${formatCurrency(venta.total / 1.21)}</span>
+      </div>
+      <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+        <span>IVA 21%:</span>
+        <span>${formatCurrency(venta.total - venta.total / 1.21)}</span>
+      </div>
+      <div style="display: flex; justify-content: space-between; font-weight: bold; font-size: 18px; border-top: 1px solid #000; padding-top: 8px;">
+        <span>TOTAL:</span>
+        <span>${formatCurrency(venta.total)}</span>
+      </div>
+      ${mixedPaymentHtml}
+    </div>
+  </div>
+
+  ${electronicHtml}
+
+  <div style="margin-top: 16px; text-align: center; font-size: 9px; color: #6b7280;">
+    ${footerHtml}
+  </div>
+</body>
+</html>
+    `;
+  };
+
+  // Función para generar HTML de remito
+  const generarHtmlRemito = (venta: Venta): string => {
+    const formatCurrency = (amount: number) =>
+      new Intl.NumberFormat("es-AR", {
+        style: "currency",
+        currency: "ARS",
+        minimumFractionDigits: 0,
+      }).format(amount || 0);
+
+    const formatTime = (date: any) => {
+      if (!date) return "--:--";
+      try {
+        let d: Date;
+        if (date?.toDate) d = date.toDate();
+        else if (typeof date === "string") d = new Date(date);
+        else if (typeof date === "number") d = new Date(date);
+        else if (date instanceof Date) d = date;
+        else if (date?.seconds) d = new Date(date.seconds * 1000);
+        else return "--:--";
+        return isNaN(d.getTime())
+          ? "--:--"
+          : d.toLocaleTimeString("es-AR", {
+              hour: "2-digit",
+              minute: "2-digit",
+            });
+      } catch {
+        return "--:--";
+      }
+    };
+
+    const remitoNumber =
+      venta.remitoNumber || `R-${new Date().getFullYear()}-00001`;
+
+    return `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: system-ui, sans-serif;
+      background: white;
+      padding: 32px;
+      width: 210mm;
+      min-height: 297mm;
+    }
+    .header { border-bottom: 2px solid black; padding-bottom: 16px; margin-bottom: 24px; }
+    .company { font-size: 24px; font-weight: bold; }
+    .remito-number { font-size: 20px; text-align: right; }
+    .info-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin-bottom: 24px; }
+    .info-box { border: 1px solid #ccc; padding: 12px; border-radius: 4px; }
+    table { width: 100%; border-collapse: collapse; margin-bottom: 24px; }
+    th, td { padding: 12px; border: 1px solid black; text-align: left; }
+    th { background: #f0f0f0; font-weight: bold; }
+    .footer { border-top: 2px solid black; padding-top: 16px; text-align: center; color: #666; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div style="display: flex; justify-content: space-between; align-items: center;">
+      <div class="company">HELADOS MIO</div>
+      <div class="remito-number">REMITO N° ${remitoNumber}</div>
+    </div>
+  </div>
+
+  <div class="info-grid">
+    <div class="info-box">
+      <strong>Cliente:</strong><br>
+      ${venta.clientName || "Cliente"}<br>
+      ${venta.clientPhone || ""}
+    </div>
+    <div class="info-box">
+      <strong>Fecha:</strong> ${safeFormatDate(venta.createdAt)}<br>
+      <strong>Hora:</strong> ${formatTime(venta.createdAt)}
+    </div>
+  </div>
+
+  <div class="info-box" style="margin-bottom: 24px;">
+    <strong>Dirección de entrega:</strong><br>
+    ${venta.deliveryAddress || venta.clientAddress || venta.clientData?.address || "-"}
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th style="width: 80px;">Cantidad</th>
+        <th>Producto</th>
+        <th style="width: 120px; text-align: right;">Precio Unit.</th>
+        <th style="width: 120px; text-align: right;">Subtotal</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${venta.items.map(item => `
+        <tr>
+          <td style="text-align: center;">${item.quantity}</td>
+          <td>${item.name}</td>
+          <td style="text-align: right;">${formatCurrency(item.price)}</td>
+          <td style="text-align: right;">${formatCurrency(item.price * item.quantity)}</td>
+        </tr>
+      `).join("")}
+    </tbody>
+    <tfoot>
+      <tr>
+        <td colspan="3" style="text-align: right; font-weight: bold;">TOTAL:</td>
+        <td style="text-align: right; font-weight: bold; font-size: 16px;">${formatCurrency(venta.total)}</td>
+      </tr>
+    </tfoot>
+  </table>
+
+  <div class="footer">
+    <p>Comprobante de entrega de mercadería</p>
+    <p>HELADOS MIO S.R.L. - CUIT: 30-12345678-9</p>
+  </div>
+</body>
+</html>
+    `;
+  };
+
+  // ==================== EMITIR DOCUMENTO ====================
+  const emitirDocumento = async () => {
     if (!ventaParaEmitir) return;
     setEmitiendo(true);
+    const toastId = `generar-${tipoDocumento}`;
+    toast.loading(`Generando ${tipoDocumento}...`, { id: toastId });
+
     try {
-      if (tipoDocumento === "invoice") {
-        let clienteData: Client | null = null;
-        try {
-          const clientes = await clientsApi.getAll();
-          clienteData = clientes.find((c: Client) => c.name === ventaParaEmitir.clientName) || null;
-        } catch (e) {
-          console.warn("No se pudo obtener datos del cliente:", e);
+      const auth = getAuth();
+      const user = auth.currentUser;
+      if (!user) throw new Error("Usuario no autenticado");
+      const token = await user.getIdToken();
+
+      if (tipoDocumento === "boleta") {
+        // 1. Emitir en AFIP
+        const afipResponse = await fetch("/api/ventas/emitir", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            saleId: ventaParaEmitir.id,
+            client: ventaParaEmitir.clientData || {
+              name: ventaParaEmitir.clientName,
+              phone: ventaParaEmitir.clientPhone,
+              cuit: ventaParaEmitir.clientCuit,
+              taxCategory: ventaParaEmitir.clientTaxCategory,
+            },
+            emitirAfip: true,
+          }),
+        });
+
+        if (!afipResponse.ok) {
+          let errorText = "";
+          try {
+            errorText = await afipResponse.text();
+          } catch {
+            errorText = "Error desconocido";
+          }
+          throw new Error(`Error en AFIP (${afipResponse.status}): ${errorText.substring(0, 200)}`);
         }
 
-        const payloadFactura = {
-          name: ventaParaEmitir.clientName || "Consumidor Final",
-          phone: ventaParaEmitir.clientPhone || "",
-          email: clienteData?.email || "",
-          taxCategory: clienteData?.taxCategory || "consumidor_final",
-          cuit: clienteData?.cuit || "",
-          dni: clienteData?.dni || "",
-        };
+        const afipResult = await afipResponse.json();
+        const { invoiceNumber, afipData } = afipResult;
 
-        const resultado = await salesApi.emitInvoice(ventaParaEmitir.id, payloadFactura);
-
-        setVentas((prev) =>
-          prev.map((v) =>
-            v.id === ventaParaEmitir.id
-              ? {
-                  ...v,
-                  invoiceEmitted: true,
-                  invoiceNumber: resultado.invoiceNumber,
-                  invoicePdfUrl: resultado.pdfUrl,
-                  invoiceWhatsappUrl: resultado.whatsappUrl,
-                }
-              : v
-          )
+        // 2. Generar PDF con los datos de AFIP
+        const pdfBase64 = await generarPdfCompleto(
+          { ...ventaParaEmitir, invoiceNumber },
+          "boleta",
+          afipData
         );
 
-        toast.success("Boleta emitida correctamente");
-      } else {
-        const resultado = await remitoApi.createRemito(ventaParaEmitir.id);
+        // 3. Guardar en Firestore
+        const ventaRef = doc(db, "ventas", ventaParaEmitir.id);
+        await updateDoc(ventaRef, {
+          invoicePdfBase64: pdfBase64,
+          invoiceNumber,
+          invoiceEmitted: true,
+          invoiceStatus: "emitted",
+          afipData,
+          invoiceGeneratedAt: serverTimestamp(),
+        });
 
-        setVentas((prev) =>
-          prev.map((v) =>
-            v.id === ventaParaEmitir.id
-              ? {
-                  ...v,
-                  remitoNumber: resultado.remitoNumber,
-                  remitoPdfUrl: resultado.pdfUrl,
-                }
-              : v
-          )
+        // 4. Guardar metadata del PDF
+        await savePdfToDatabase(ventaParaEmitir.id, "invoice", {
+          base64: pdfBase64,
+          filename: `boleta-${invoiceNumber}.pdf`,
+          contentType: "application/pdf",
+          size: Math.ceil((pdfBase64.length * 3) / 4),
+          generatedAt: new Date().toISOString(),
+        });
+
+        // 5. Descargar
+        downloadBase64Pdf(pdfBase64, `boleta-${invoiceNumber}.pdf`);
+        toast.success("Boleta emitida correctamente", { id: toastId });
+
+      } else if (tipoDocumento === "remito") {
+        // 1. Generar número de remito
+        const remitosQuery = query(
+          collection(db, "ventas"),
+          where("remitoNumber", "!=", null),
+          orderBy("remitoNumber", "desc"),
+          limit(1)
+        );
+        const remitosSnapshot = await getDocs(remitosQuery);
+        let ultimoNumero = 0;
+        if (!remitosSnapshot.empty) {
+          const lastRemito = remitosSnapshot.docs[0].data().remitoNumber;
+          const match = lastRemito?.match(/R-\d+-(\d+)/);
+          if (match) ultimoNumero = parseInt(match[1], 10);
+        }
+        const remitoNumber = `R-${new Date().getFullYear()}-${String(ultimoNumero + 1).padStart(5, "0")}`;
+
+        // 2. Generar PDF
+        const pdfBase64 = await generarPdfCompleto(
+          { ...ventaParaEmitir, remitoNumber },
+          "remito"
         );
 
-        toast.success("Remito generado correctamente");
+        // 3. Guardar en Firestore
+        const ventaRef = doc(db, "ventas", ventaParaEmitir.id);
+        await updateDoc(ventaRef, {
+          remitoPdfBase64: pdfBase64,
+          remitoNumber,
+          remitoGeneratedAt: serverTimestamp(),
+        });
+
+        // 4. Guardar metadata del PDF
+        await savePdfToDatabase(ventaParaEmitir.id, "remito", {
+          base64: pdfBase64,
+          filename: `remito-${remitoNumber}.pdf`,
+          contentType: "application/pdf",
+          size: Math.ceil((pdfBase64.length * 3) / 4),
+          generatedAt: new Date().toISOString(),
+        });
+
+        // 5. Descargar
+        downloadBase64Pdf(pdfBase64, `remito-${remitoNumber}.pdf`);
+        toast.success("Remito generado correctamente", { id: toastId });
       }
+
+      await cargarVentas();
       cerrarEmitir();
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error emitiendo documento:", error);
-      toast.error(tipoDocumento === "invoice" ? "Error al emitir boleta" : "Error al generar remito");
+      toast.error(`Error: ${error.message}`, { id: toastId });
     } finally {
       setEmitiendo(false);
     }
-  }, [ventaParaEmitir, tipoDocumento, cerrarEmitir]);
+  };
 
-  // Descargar PDF
-  const descargarPdf = useCallback((url: string, nombre: string) => {
-    if (url.startsWith("data:application/pdf;base64,")) {
-      const base64 = url.split(",")[1];
-      const byteCharacters = atob(base64);
+  // Descargar PDF existente
+  const descargarPdf = (venta: Venta, tipo: "boleta" | "remito" = "boleta") => {
+    const base64 = tipo === "boleta" ? venta.invoicePdfBase64 : venta.remitoPdfBase64;
+    if (base64) {
+      const filename =
+        tipo === "boleta"
+          ? `boleta-${venta.invoiceNumber || venta.id}.pdf`
+          : `remito-${venta.remitoNumber}.pdf`;
+      downloadBase64Pdf(base64, filename);
+    } else {
+      toast.error("El PDF no está disponible. Genérelo primero.");
+    }
+  };
+
+  const construirUrlWhatsapp = (venta: Venta) => {
+    if (!venta.clientPhone) return null;
+    const telefono = venta.clientPhone.replace(/\D/g, "");
+    const formattedPhone = telefono.startsWith("54") ? telefono : `54${telefono}`;
+    
+    // Crear mensaje con instrucciones para descargar el PDF
+    const tieneFactura = venta.invoiceEmitted && venta.invoicePdfBase64;
+    const tieneRemito = venta.remitoNumber && venta.remitoPdfBase64;
+    
+    let mensaje = `Hola ${venta.clientName || ""},\n\n`;
+    
+    if (tieneFactura) {
+      mensaje += `Tu factura N° ${venta.invoiceNumber} está lista.\n`;
+      mensaje += `Total: $${venta.total.toLocaleString('es-AR')}\n\n`;
+    }
+    
+    if (tieneRemito) {
+      mensaje += `Tu remito N° ${venta.remitoNumber} está listo.\n\n`;
+    }
+    
+    mensaje += `Para descargar el comprobante, haz clic en el siguiente enlace:\n`;
+    mensaje += `${window.location.origin}/ventas?saleId=${venta.id}`;
+    
+    return `https://wa.me/${formattedPhone}?text=${encodeURIComponent(mensaje)}`;
+  };
+
+  const enviarPorWhatsapp = async (venta: Venta, tipo: "boleta" | "remito" = "boleta") => {
+    const base64 = tipo === "boleta" ? venta.invoicePdfBase64 : venta.remitoPdfBase64;
+    const phone = venta.clientPhone;
+
+    if (!base64) {
+      toast.error("El PDF no está disponible");
+      return;
+    }
+
+    if (!phone) {
+      toast.error("El cliente no tiene teléfono");
+      return;
+    }
+
+    try {
+      const filename = tipo === "boleta" 
+        ? `Factura-${venta.invoiceNumber || venta.id}.pdf`
+        : `Remito-${venta.remitoNumber || venta.id}.pdf`;
+
+      // Limpiar base64 y crear blob
+      const cleanBase64 = base64.replace(/\s/g, '');
+      const byteCharacters = atob(cleanBase64);
       const byteNumbers = new Array(byteCharacters.length);
       for (let i = 0; i < byteCharacters.length; i++) {
         byteNumbers[i] = byteCharacters.charCodeAt(i);
       }
       const byteArray = new Uint8Array(byteNumbers);
       const blob = new Blob([byteArray], { type: "application/pdf" });
-      const blobUrl = window.URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = blobUrl;
-      link.download = nombre;
-      link.click();
-      window.URL.revokeObjectURL(blobUrl);
-    } else {
+
+      const cleanPhone = phone.replace(/\D/g, "");
+      const formattedPhone = cleanPhone.startsWith("54") ? cleanPhone : `54${cleanPhone}`;
+
+      // MÓVIL: Intentar compartir nativo
+      if (navigator.share) {
+        try {
+          const file = new File([blob], filename, { type: "application/pdf" });
+          
+          if (navigator.canShare && navigator.canShare({ files: [file] })) {
+            await navigator.share({
+              files: [file],
+              title: filename,
+              text: tipo === "boleta"
+                ? `Factura N° ${venta.invoiceNumber} - Total: $${venta.total.toLocaleString('es-AR')}`
+                : `Remito N° ${venta.remitoNumber}`,
+            });
+            toast.success("Archivo compartido");
+            return;
+          }
+        } catch (shareError) {
+          console.log("Compartir nativo no disponible, usando método alternativo");
+        }
+      }
+
+      // DESKTOP/FALLBACK: Descargar + abrir WhatsApp con instrucciones
+      console.log("💻 Descargando PDF y abriendo WhatsApp");
+      
+      // 1. Descargar el PDF
+      const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      link.download = nombre;
+      link.download = filename;
+      document.body.appendChild(link);
       link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
+      // 2. Abrir WhatsApp con mensaje
+      const mensaje = tipo === "boleta"
+        ? `Hola ${venta.clientName || ""}! 👋\n\nTe descargué la *Factura N° ${venta.invoiceNumber}*\nTotal: $${venta.total.toLocaleString('es-AR')}\n\n📎 Adjuntá el archivo PDF que se descargó automáticamente.`
+        : `Hola ${venta.clientName || ""}! 👋\n\nTe descargué el *Remito N° ${venta.remitoNumber}*\n\n📎 Adjuntá el archivo PDF que se descargó automáticamente.`;
+      
+      window.open(
+        `https://wa.me/${formattedPhone}?text=${encodeURIComponent(mensaje)}`,
+        "_blank"
+      );
+
+      toast.success("PDF descargado. Adjuntalo manualmente en WhatsApp.", {
+        duration: 5000,
+      });
+
+    } catch (error: any) {
+      console.error("❌ Error enviando por WhatsApp:", error);
+      toast.error("Error: " + error.message);
     }
-  }, []);
+  };
 
-  // WhatsApp
-  const construirUrlWhatsapp = useCallback((phone?: string, pdfUrl?: string, clientName?: string) => {
-    if (!phone || !pdfUrl) return null;
-    const clean = phone.replace(/[^\d]/g, "");
-    if (!clean) return null;
-    const msg = `Hola${clientName ? ` ${clientName}` : ""}, tu comprobante esta listo: ${pdfUrl}`;
-    return `https://wa.me/${clean}?text=${encodeURIComponent(msg)}`;
-  }, []);
+  const formatearMoneda = (monto: number) => {
+    return new Intl.NumberFormat("es-AR", {
+      style: "currency",
+      currency: "ARS",
+    }).format(monto || 0);
+  };
 
-  // Actualizar filtros
-  const actualizarFiltros = useCallback((nuevosFiltros: Partial<FiltrosVentas>) => {
-    setFiltros((prev) => ({ ...prev, ...nuevosFiltros }));
-  }, []);
+  const formatearFechaHora = (fecha: any) => safeFormatDateTime(fecha);
 
-  // Limpiar filtros
-  const limpiarFiltros = useCallback(() => {
-    setFiltros({
-      searchQuery: "",
-      invoiceFilter: "all",
-      paymentFilter: "all",
-      periodFilter: "today",
-    });
-  }, []);
+  const etiquetaPago = (tipo: string) => {
+    const etiquetas: Record<string, string> = {
+      cash: "Contado",
+      credit: "Cuenta Corriente",
+      mixed: "Mixto",
+    };
+    return etiquetas[tipo] || tipo;
+  };
+
+  const claseBadgePago = (tipo: string) => {
+    const clases: Record<string, string> = {
+      cash: "bg-green-100 text-green-800",
+      credit: "bg-blue-100 text-blue-800",
+      mixed: "bg-purple-100 text-purple-800",
+    };
+    return clases[tipo] || "bg-gray-100 text-gray-800";
+  };
 
   return {
     ventas,
     ventasFiltradas,
     cargando,
     filtros,
+    actualizarFiltros,
+    recargar: cargarVentas,
     modalDetalleAbierto,
     ventaSeleccionada,
+    abrirDetalle,
+    cerrarDetalle,
+    abrirDetallePorId,
     modalEmitirAbierto,
     ventaParaEmitir,
     tipoDocumento,
     emitiendo,
-    // Acciones
-    recargar: cargarDatos,
-    actualizarFiltros,
-    limpiarFiltros,
-    setTipoDocumento,
-    // Modales
-    abrirDetalle,
-    abrirDetallePorId, // <-- FUNCIÓN AGREGADA
-    cerrarDetalle,
     abrirEmitir,
     cerrarEmitir,
     emitirDocumento,
-    // Helpers
+    setTipoDocumento,
     descargarPdf,
     construirUrlWhatsapp,
+    enviarPorWhatsapp,
     formatearMoneda,
-    formatearFecha,
     formatearFechaHora,
-    formatearHora,
     etiquetaPago,
     claseBadgePago,
   };

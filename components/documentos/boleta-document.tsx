@@ -1,4 +1,3 @@
-// components/documentos/boleta-document.tsx
 import { forwardRef } from "react";
 
 interface BoletaItem {
@@ -85,20 +84,131 @@ export const BoletaDocument = forwardRef<HTMLDivElement, BoletaDocumentProps>(
   ) => {
     const isElectronica = !!cae;
 
+    // ESTILOS INLINE CON COLORES HEX - Compatible con html2canvas
+    const styles = {
+      container: {
+        backgroundColor: "#ffffff",
+        color: "#000000",
+        padding: "10mm",
+        width: "210mm",
+        minHeight: "297mm",
+        fontFamily: "monospace",
+        fontSize: "11px",
+        lineHeight: 1.4,
+        boxSizing: "border-box" as const,
+      },
+      borderBox: {
+        border: "2px solid #000000",
+        marginBottom: "16px",
+      },
+      grid3: {
+        display: "grid",
+        gridTemplateColumns: "repeat(3, 1fr)",
+      },
+      grid2: {
+        display: "grid",
+        gridTemplateColumns: "repeat(2, 1fr)",
+        gap: "16px",
+      },
+      borderR: {
+        borderRight: "2px solid #000000",
+      },
+      p4: {
+        padding: "16px",
+      },
+      textCenter: {
+        textAlign: "center" as const,
+      },
+      textRight: {
+        textAlign: "right" as const,
+      },
+      fontBold: {
+        fontWeight: "bold",
+      },
+      textXl: {
+        fontSize: "20px",
+      },
+      textLg: {
+        fontSize: "18px",
+      },
+      textXs: {
+        fontSize: "9px",
+      },
+      mb2: {
+        marginBottom: "8px",
+      },
+      mb4: {
+        marginBottom: "16px",
+      },
+      mt2: {
+        marginTop: "8px",
+      },
+      mt4: {
+        marginTop: "16px",
+      },
+      docTypeBox: {
+        border: "2px solid #000000",
+        width: "64px",
+        height: "64px",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        fontSize: "32px",
+        fontWeight: "bold",
+        margin: "0 auto 8px",
+      },
+      table: {
+        width: "100%",
+        borderCollapse: "collapse" as const,
+        tableLayout: "fixed" as const,
+      },
+      th: {
+        padding: "8px",
+        border: "1px solid #000000",
+        fontWeight: "bold",
+        textAlign: "left" as const,
+        backgroundColor: "#f0f0f0",
+      },
+      td: {
+        padding: "8px",
+        border: "1px solid #000000",
+      },
+      textRed: {
+        color: "#dc2626",
+      },
+      textGray: {
+        color: "#6b7280",
+      },
+      borderT: {
+        borderTop: "1px dashed #000000",
+        paddingTop: "8px",
+      },
+      qrBox: {
+        border: "2px solid #000000",
+        width: "96px",
+        height: "96px",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        fontSize: "10px",
+      },
+      totalsBox: {
+        width: "256px",
+        marginLeft: "auto",
+      },
+    };
+
     return (
-      <div
-        ref={ref}
-        className="bg-white text-black p-[10mm] w-[210mm] min-h-[297mm] font-mono text-[11px] leading-tight box-border"
-        style={{
-          fontFamily: "monospace",
-          boxSizing: "border-box",
-        }}
-      >
-        <div className="border-2 border-black mb-4">
-          <div className="grid grid-cols-3">
-            <div className="p-4 border-r-2 border-black">
-              <h1 className="text-xl font-bold mb-2">HELADOS MIO</h1>
-              <p className="text-xs leading-relaxed">
+      <div ref={ref} style={styles.container}>
+        <div style={styles.borderBox}>
+          <div style={styles.grid3}>
+            <div style={{ ...styles.p4, ...styles.borderR }}>
+              <h1
+                style={{ ...styles.textXl, ...styles.fontBold, ...styles.mb2 }}
+              >
+                HELADOS MIO
+              </h1>
+              <p style={{ ...styles.textXs, lineHeight: 1.6 }}>
                 Razon Social: HELADOS MIO S.R.L.
                 <br />
                 Domicilio Comercial: Av. Principal 1234
@@ -109,11 +219,11 @@ export const BoletaDocument = forwardRef<HTMLDivElement, BoletaDocumentProps>(
               </p>
             </div>
 
-            <div className="p-4 border-r-2 border-black flex flex-col items-center justify-center">
-              <div className="border-2 border-black w-16 h-16 flex items-center justify-center text-3xl font-bold mb-2">
-                {isElectronica ? "B" : "X"}
-              </div>
-              <p className="text-xs text-center">
+            <div
+              style={{ ...styles.p4, ...styles.borderR, ...styles.textCenter }}
+            >
+              <div style={styles.docTypeBox}>{isElectronica ? "B" : "X"}</div>
+              <p style={styles.textXs}>
                 {isElectronica
                   ? "Codigo 006"
                   : "Documento No Valido como Factura"}
@@ -122,13 +232,15 @@ export const BoletaDocument = forwardRef<HTMLDivElement, BoletaDocumentProps>(
               </p>
             </div>
 
-            <div className="p-4">
-              <p className="text-lg font-bold mb-2">
+            <div style={styles.p4}>
+              <p
+                style={{ ...styles.textLg, ...styles.fontBold, ...styles.mb2 }}
+              >
                 Punto de Venta: {boletaNumber.split("-")[0] || "0001"}
                 <br />
                 Comp. Nro: {boletaNumber.split("-")[1] || boletaNumber}
               </p>
-              <p className="text-xs leading-relaxed">
+              <p style={{ ...styles.textXs, lineHeight: 1.6 }}>
                 Fecha de Emision: {formatDate(date)}
                 <br />
                 CUIT: 30-12345678-9
@@ -141,143 +253,169 @@ export const BoletaDocument = forwardRef<HTMLDivElement, BoletaDocumentProps>(
           </div>
         </div>
 
-        <div className="border-2 border-black p-4 mb-4">
-          <div className="grid grid-cols-2 gap-4">
+        <div style={{ ...styles.borderBox, ...styles.p4 }}>
+          <div style={styles.grid2}>
             <div>
               <p>
-                <span className="font-bold">CUIT:</span>{" "}
+                <span style={styles.fontBold}>CUIT:</span>{" "}
                 {clientCuit || "00-00000000-0"}
               </p>
               <p>
-                <span className="font-bold">Condicion frente al IVA:</span>{" "}
+                <span style={styles.fontBold}>Condicion frente al IVA:</span>{" "}
                 {getTaxCategoryLabel(clientTaxCategory)}
               </p>
             </div>
             <div>
-              <p>
-                <span className="font-bold">
-                  Apellido y Nombre / Razon Social:
-                </span>
-              </p>
+              <p style={styles.fontBold}>Apellido y Nombre / Razon Social:</p>
               <p>{clientName || "Consumidor Final"}</p>
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-4 mt-2">
+          <div style={{ ...styles.grid2, ...styles.mt2 }}>
             <p>
-              <span className="font-bold">Domicilio:</span>{" "}
+              <span style={styles.fontBold}>Domicilio:</span>{" "}
               {clientAddress || "-"}
             </p>
             <p>
-              <span className="font-bold">Condicion de venta:</span>{" "}
+              <span style={styles.fontBold}>Condicion de venta:</span>{" "}
               {getPaymentTypeLabel(paymentType)}
             </p>
           </div>
         </div>
 
-        <div className="border-2 border-black mb-4 overflow-hidden">
-          <table
-            className="w-full border-collapse"
-            style={{ tableLayout: "fixed" }}
-          >
+        <div style={styles.borderBox}>
+          <table style={styles.table}>
             <thead>
-              <tr className="border-b-2 border-black bg-gray-100">
-                <th className="text-left p-2 border-r border-black">
-                  Cantidad
-                </th>
-                <th className="text-left p-2 border-r border-black">
-                  Descripcion
-                </th>
-                <th className="text-right p-2 border-r border-black">
+              <tr>
+                <th style={{ ...styles.th, width: "80px" }}>Cantidad</th>
+                <th style={styles.th}>Descripcion</th>
+                <th
+                  style={{ ...styles.th, ...styles.textRight, width: "100px" }}
+                >
                   Precio Unit.
                 </th>
-                <th className="text-right p-2 border-r border-black">% IVA</th>
-                <th className="text-right p-2">Subtotal</th>
+                <th
+                  style={{ ...styles.th, ...styles.textRight, width: "80px" }}
+                >
+                  % IVA
+                </th>
+                <th
+                  style={{ ...styles.th, ...styles.textRight, width: "100px" }}
+                >
+                  Subtotal
+                </th>
               </tr>
             </thead>
             <tbody>
               {items.map((item, index) => (
-                <tr key={index} className="border-b border-black">
-                  <td className="p-2 border-r border-black text-center">
+                <tr key={index}>
+                  <td style={{ ...styles.td, textAlign: "center" }}>
                     {item.quantity}
                   </td>
-                  <td className="p-2 border-r border-black">{item.name}</td>
-                  <td className="p-2 border-r border-black text-right">
+                  <td style={styles.td}>{item.name}</td>
+                  <td style={{ ...styles.td, ...styles.textRight }}>
                     {formatCurrency(item.price)}
                   </td>
-                  <td className="p-2 border-r border-black text-right">
-                    21.00
-                  </td>
-                  <td className="p-2 text-right">
+                  <td style={{ ...styles.td, ...styles.textRight }}>21.00</td>
+                  <td style={{ ...styles.td, ...styles.textRight }}>
                     {formatCurrency(item.price * item.quantity)}
                   </td>
                 </tr>
               ))}
-              {items.length < 10 &&
-                Array.from({ length: 10 - items.length }).map((_, i) => (
-                  <tr key={`empty-${i}`} className="border-b border-black">
-                    <td className="p-2 border-r border-black">&nbsp;</td>
-                    <td className="p-2 border-r border-black">&nbsp;</td>
-                    <td className="p-2 border-r border-black">&nbsp;</td>
-                    <td className="p-2 border-r border-black">&nbsp;</td>
-                    <td className="p-2">&nbsp;</td>
+              {Array.from({ length: Math.max(0, 10 - items.length) }).map(
+                (_, i) => (
+                  <tr key={`empty-${i}`}>
+                    <td style={styles.td}>&nbsp;</td>
+                    <td style={styles.td}>&nbsp;</td>
+                    <td style={styles.td}>&nbsp;</td>
+                    <td style={styles.td}>&nbsp;</td>
+                    <td style={styles.td}>&nbsp;</td>
                   </tr>
-                ))}
+                ),
+              )}
             </tbody>
           </table>
         </div>
 
-        <div className="border-2 border-black p-4 mb-4">
-          <div className="flex justify-end">
-            <div className="w-64">
-              <div className="flex justify-between mb-1">
-                <span>Subtotal:</span>
-                <span>{formatCurrency(total / 1.21)}</span>
-              </div>
-              <div className="flex justify-between mb-1">
-                <span>IVA 21%:</span>
-                <span>{formatCurrency(total - total / 1.21)}</span>
-              </div>
-              <div className="flex justify-between font-bold text-lg border-t border-black pt-2">
-                <span>TOTAL:</span>
-                <span>{formatCurrency(total)}</span>
-              </div>
-              {paymentType === "mixed" && (
-                <div className="mt-2 pt-2 border-t border-dashed border-black text-xs">
-                  <div className="flex justify-between">
-                    <span>Efectivo:</span>
-                    <span>{formatCurrency(cashAmount || 0)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>A Cuenta:</span>
-                    <span>{formatCurrency(creditAmount || 0)}</span>
-                  </div>
-                </div>
-              )}
+        <div style={{ ...styles.borderBox, ...styles.p4 }}>
+          <div style={styles.totalsBox}>
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                marginBottom: "4px",
+              }}
+            >
+              <span>Subtotal:</span>
+              <span>{formatCurrency((total || 0) / 1.21)}</span>
             </div>
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                marginBottom: "4px",
+              }}
+            >
+              <span>IVA 21%:</span>
+              <span>{formatCurrency((total || 0) - (total || 0) / 1.21)}</span>
+            </div>
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                fontWeight: "bold",
+                fontSize: "18px",
+                borderTop: "1px solid #000000",
+                paddingTop: "8px",
+              }}
+            >
+              <span>TOTAL:</span>
+              <span>{formatCurrency(total || 0)}</span>
+            </div>
+            {paymentType === "mixed" && (
+              <div
+                style={{
+                  ...styles.borderT,
+                  marginTop: "8px",
+                  fontSize: "12px",
+                }}
+              >
+                <div
+                  style={{ display: "flex", justifyContent: "space-between" }}
+                >
+                  <span>Efectivo:</span>
+                  <span>{formatCurrency(cashAmount || 0)}</span>
+                </div>
+                <div
+                  style={{ display: "flex", justifyContent: "space-between" }}
+                >
+                  <span>A Cuenta:</span>
+                  <span>{formatCurrency(creditAmount || 0)}</span>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
         {isElectronica ? (
-          <div className="border-2 border-black p-4">
-            <div className="grid grid-cols-2 gap-4">
+          <div style={{ ...styles.borderBox, ...styles.p4 }}>
+            <div style={styles.grid2}>
               <div>
-                <p className="text-xs">
-                  <span className="font-bold">CAE N:</span> {cae}
-                </p>
-                <p className="text-xs">
-                  <span className="font-bold">Fecha de Vto. de CAE:</span>{" "}
+                <p style={styles.textXs}>
+                  <span style={styles.fontBold}>CAE N:</span> {cae}
+                  <br />
+                  <span style={styles.fontBold}>
+                    Fecha de Vto. de CAE:
+                  </span>{" "}
                   {caeVencimiento ? formatDate(caeVencimiento) : "-"}
                 </p>
               </div>
-              <div className="flex justify-end">
-                <div className="w-24 h-24 border-2 border-black flex items-center justify-center text-xs text-center">
+              <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                <div style={styles.qrBox}>
                   {barcodeData ? (
                     <img
-                      src={`https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=${encodeURIComponent(
-                        barcodeData,
-                      )}`}
+                      src={`https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=${encodeURIComponent(barcodeData)}`}
                       alt="QR AFIP"
-                      className="w-full h-full"
+                      style={{ width: "100%", height: "100%" }}
                     />
                   ) : (
                     "QR AFIP"
@@ -287,18 +425,33 @@ export const BoletaDocument = forwardRef<HTMLDivElement, BoletaDocumentProps>(
             </div>
           </div>
         ) : (
-          <div className="border-2 border-black p-4 text-center">
-            <p className="text-sm font-bold text-red-600">
+          <div
+            style={{ ...styles.borderBox, ...styles.p4, ...styles.textCenter }}
+          >
+            <p
+              style={{
+                ...styles.fontBold,
+                ...styles.textRed,
+                fontSize: "14px",
+              }}
+            >
               DOCUMENTO NO VALIDO COMO FACTURA
             </p>
-            <p className="text-xs text-gray-600">
+            <p style={{ ...styles.textXs, ...styles.textGray }}>
               Este documento es un presupuesto. Solicite factura electrónica si
               la requiere.
             </p>
           </div>
         )}
 
-        <div className="mt-4 text-center text-xs text-gray-600">
+        <div
+          style={{
+            ...styles.mt4,
+            ...styles.textCenter,
+            ...styles.textXs,
+            ...styles.textGray,
+          }}
+        >
           {isElectronica ? (
             <>
               <p>Comprobante autorizado por AFIP</p>

@@ -1,4 +1,3 @@
-// app/ventas/page.tsx
 "use client";
 
 import { MainLayout } from "@/components/layout/main-layout";
@@ -7,9 +6,10 @@ import { ListaVentas } from "@/components/ListaVentas";
 import { ModalDetalleVenta } from "@/components/ModalDetalleVenta";
 import { ModalEmitirDocumento } from "@/components/ModalEmitirDocumento";
 import { useSearchParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 
-export default function VentasPage() {
+// Componente interno que usa useSearchParams
+function VentasContentInner() {
   const searchParams = useSearchParams();
   const saleIdFromUrl = searchParams.get("saleId");
   const [mounted, setMounted] = useState(false);
@@ -20,13 +20,11 @@ export default function VentasPage() {
     filtros,
     actualizarFiltros,
     recargar,
-    // Modales
     modalDetalleAbierto,
     ventaSeleccionada,
     abrirDetalle,
     cerrarDetalle,
     abrirDetallePorId,
-    // Emitir
     modalEmitirAbierto,
     ventaParaEmitir,
     tipoDocumento,
@@ -35,7 +33,6 @@ export default function VentasPage() {
     cerrarEmitir,
     emitirDocumento,
     setTipoDocumento,
-    // Helpers
     descargarPdf,
     construirUrlWhatsapp,
     formatearMoneda,
@@ -48,7 +45,6 @@ export default function VentasPage() {
     setMounted(true);
   }, []);
 
-  // Abrir detalle automáticamente si viene saleId en URL
   useEffect(() => {
     if (saleIdFromUrl && !cargando && mounted) {
       abrirDetallePorId(saleIdFromUrl);
@@ -83,7 +79,6 @@ export default function VentasPage() {
         onCerrar={cerrarDetalle}
         onEmitirBoleta={(venta) => {
           cerrarDetalle();
-          // Pequeño delay para evitar problemas de DOM
           setTimeout(() => abrirEmitir(venta), 100);
         }}
         onGenerarRemito={(venta) => {
@@ -113,4 +108,30 @@ export default function VentasPage() {
       />
     </MainLayout>
   );
+}
+
+// Componente de loading
+function VentasLoading() {
+  return (
+    <MainLayout title="Ventas" description="Historial y gestión de ventas">
+      <div className="animate-pulse space-y-4">
+        <div className="h-8 bg-muted rounded w-1/4"></div>
+        <div className="h-32 bg-muted rounded"></div>
+      </div>
+    </MainLayout>
+  );
+}
+
+// Componente principal envuelto en Suspense
+function VentasContent() {
+  return (
+    <Suspense fallback={<VentasLoading />}>
+      <VentasContentInner />
+    </Suspense>
+  );
+}
+
+// DEFAULT EXPORT - Este es el componente que Next.js busca
+export default function VentasPage() {
+  return <VentasContent />;
 }

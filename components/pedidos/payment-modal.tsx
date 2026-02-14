@@ -1,4 +1,4 @@
-//components\pedidos\payment-modal.tsx
+//components/pedidos/payment-modal.tsx
 "use client";
 
 import React from "react";
@@ -19,13 +19,22 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  generateOrderNumber,
-  calculateOrderTotal,
-  formatPrice,
-} from "@/app/pedidos/page";
+import { formatPrice } from "@/lib/utils/format";
 import type { Order, Client } from "@/lib/types";
 import { Banknote, CreditCard, UserPlus, Loader2, Wallet } from "lucide-react";
+
+const generateOrderNumber = (createdAt: Date | string, index: number) => {
+  const date = new Date(createdAt);
+  const year = date.getFullYear().toString().slice(-2);
+  const month = (date.getMonth() + 1).toString().padStart(2, "0");
+  const day = date.getDate().toString().padStart(2, "0");
+  const orderNum = (index + 1).toString().padStart(4, "0");
+  return `${year}${month}${day}-${orderNum}`;
+};
+
+const calculateOrderTotal = (order: Order) => {
+  return order.items.reduce((sum, item) => sum + item.price * item.quantity, 0);
+};
 
 interface PaymentModalProps {
   isOpen: boolean;
@@ -98,7 +107,6 @@ export function PaymentModal({
         </DialogHeader>
 
         <div className="py-4 space-y-5">
-          {/* Order Summary */}
           <div className="p-4 bg-gradient-to-br from-gray-50 to-gray-100 rounded-xl border border-gray-200">
             <p className="text-xs text-gray-500 uppercase font-semibold mb-1">
               Pedido
@@ -111,7 +119,6 @@ export function PaymentModal({
             </p>
           </div>
 
-          {/* Payment Type Selection */}
           <RadioGroup
             value={paymentType}
             onValueChange={(v) =>
@@ -119,7 +126,6 @@ export function PaymentModal({
             }
             className="space-y-3"
           >
-            {/* Cash Option */}
             <label
               className={`flex items-center gap-4 p-4 rounded-xl border-2 cursor-pointer transition-all ${
                 paymentType === "cash"
@@ -152,7 +158,6 @@ export function PaymentModal({
               )}
             </label>
 
-            {/* Credit Option */}
             <label
               className={`flex items-center gap-4 p-4 rounded-xl border-2 cursor-pointer transition-all ${
                 paymentType === "credit"
@@ -185,7 +190,6 @@ export function PaymentModal({
               )}
             </label>
 
-            {/* Split Option */}
             <label
               className={`flex items-center gap-4 p-4 rounded-xl border-2 cursor-pointer transition-all ${
                 paymentType === "split"
@@ -219,7 +223,6 @@ export function PaymentModal({
             </label>
           </RadioGroup>
 
-          {/* Client Selection */}
           {(paymentType === "credit" || paymentType === "split") && (
             <div className="space-y-3 p-4 bg-gray-50 rounded-xl border border-gray-200">
               <Label className="text-sm font-semibold flex items-center gap-2">
@@ -272,7 +275,6 @@ export function PaymentModal({
             </div>
           )}
 
-          {/* Cash Amount Input */}
           {paymentType === "split" && (
             <div className="space-y-3 p-4 bg-amber-50 rounded-xl border border-amber-200">
               <Label
@@ -311,7 +313,6 @@ export function PaymentModal({
             </div>
           )}
 
-          {/* Total */}
           <div className="p-5 bg-gradient-to-br from-gray-900 to-gray-800 rounded-xl text-white">
             <div className="flex justify-between items-center mb-2">
               <span className="text-gray-300">Total del pedido</span>
@@ -323,7 +324,6 @@ export function PaymentModal({
             </p>
           </div>
 
-          {/* Actions */}
           <div className="flex gap-3 pt-2">
             <Button
               variant="outline"

@@ -292,7 +292,6 @@ export default function NuevaVentaPage() {
 
       // ✅ FLUJO CORREGIDO: Separar pedido de venta
       if (deliveryMethod === "delivery") {
-        // 1️⃣ SOLO crear el pedido, NO la venta
         const order = await ordersApi.createOrder({
           clientId: selectedClient,
           clientName: resolvedClientName || "Cliente",

@@ -1,4 +1,3 @@
-//components\pedidos\orders-filters.tsx
 "use client";
 
 import React from "react";
@@ -10,9 +9,20 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
-import { statusConfig, statusFlow } from "@/app/pedidos/page";
-import type { Client, Order } from "@/lib/types";
-import { Calendar, User, Store, Filter } from "lucide-react";
+import type { Client, Order, OrderStatus } from "@/lib/types";
+import {
+  Calendar,
+  User,
+  Store,
+  Filter,
+  Clock,
+  Box,
+  Truck,
+  CheckCircle,
+} from "lucide-react";
+import { statusConfig, statusFlow } from "@/lib/order-constants"; //
+
+// ... resto del código igual ...
 
 interface OrdersFiltersProps {
   filterStatus: string;
@@ -52,7 +62,6 @@ export function OrdersFilters({
 
   return (
     <div className="space-y-3">
-      {/* Stats Cards */}
       <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
         <button
           onClick={() => setFilterStatus("all")}
@@ -98,7 +107,6 @@ export function OrdersFilters({
         })}
       </div>
 
-      {/* Advanced Filters */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 p-4 bg-gray-50/80 rounded-xl border border-gray-200">
         <div className="space-y-1.5">
           <label className="text-xs font-medium text-gray-600 flex items-center gap-1.5">

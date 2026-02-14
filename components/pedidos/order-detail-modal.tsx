@@ -1,4 +1,3 @@
-//components\pedidos\order-detail-modal.tsx
 "use client";
 
 import React from "react";
@@ -11,13 +10,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
-import {
-  statusConfig,
-  statusFlow,
-  generateOrderNumber,
-  formatDateFull,
-  calculateOrderTotal,
-} from "@/app/pedidos/page";
+import { formatPrice } from "@/lib/utils/format";
 import type { Order, OrderStatus } from "@/lib/types";
 import {
   X,
@@ -29,8 +22,35 @@ import {
   ChevronRight,
   ArrowRight,
   Clock,
+  Truck,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { statusConfig, statusFlow } from "@/lib/order-constants"; //
+
+
+
+const generateOrderNumber = (createdAt: Date | string, index: number) => {
+  const date = new Date(createdAt);
+  const year = date.getFullYear().toString().slice(-2);
+  const month = (date.getMonth() + 1).toString().padStart(2, "0");
+  const day = date.getDate().toString().padStart(2, "0");
+  const orderNum = (index + 1).toString().padStart(4, "0");
+  return `${year}${month}${day}-${orderNum}`;
+};
+
+const formatDateFull = (date: Date | string) => {
+  return new Intl.DateTimeFormat("es-AR", {
+    day: "2-digit",
+    month: "long",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(date));
+};
+
+const calculateOrderTotal = (order: Order) => {
+  return order.items.reduce((sum, item) => sum + item.price * item.quantity, 0);
+};
 
 interface OrderDetailModalProps {
   isOpen: boolean;
@@ -94,7 +114,6 @@ export function OrderDetailModal({
         </DialogHeader>
 
         <div className="p-6 space-y-6">
-          {/* Sale Link if completed */}
           {order.status === "completed" && order.saleId && (
             <div className="p-4 bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-xl">
               <div className="flex items-start gap-3">
@@ -124,7 +143,6 @@ export function OrderDetailModal({
             </div>
           )}
 
-          {/* Info Grid */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="p-4 bg-gray-50 rounded-xl border border-gray-100">
               <Label className="text-xs text-gray-500 uppercase flex items-center gap-1.5 mb-2">
@@ -148,7 +166,6 @@ export function OrderDetailModal({
             </div>
           </div>
 
-          {/* Address & Date */}
           <div className="space-y-3">
             <div className="p-4 bg-gray-50 rounded-xl border border-gray-100">
               <Label className="text-xs text-gray-500 uppercase flex items-center gap-1.5 mb-2">
@@ -169,7 +186,6 @@ export function OrderDetailModal({
             </div>
           </div>
 
-          {/* Products */}
           <div>
             <Label className="text-xs text-gray-500 uppercase flex items-center gap-1.5 mb-3">
               <Box className="h-3.5 w-3.5" />
@@ -194,16 +210,12 @@ export function OrderDetailModal({
                   Total estimado
                 </span>
                 <span className="font-bold text-gray-900">
-                  {new Intl.NumberFormat("es-AR", {
-                    style: "currency",
-                    currency: "ARS",
-                  }).format(calculateOrderTotal(order))}
+                  {formatPrice(calculateOrderTotal(order))}
                 </span>
               </div>
             </div>
           </div>
 
-          {/* Timeline */}
           <div>
             <Label className="text-xs text-gray-500 uppercase mb-4 block">
               Progreso del pedido
@@ -217,7 +229,6 @@ export function OrderDetailModal({
 
                 return (
                   <div key={status} className="flex items-start gap-4 relative">
-                    {/* Connector line */}
                     {index < statusFlow.length - 1 && (
                       <div
                         className={`absolute left-4 top-8 w-0.5 h-8 ${
@@ -266,7 +277,6 @@ export function OrderDetailModal({
             </div>
           </div>
 
-          {/* Action Button */}
           {nextStatus && (
             <Button
               className="w-full h-12 text-base font-semibold shadow-lg hover:shadow-xl transition-shadow"

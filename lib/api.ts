@@ -1,4 +1,3 @@
-// lib/api.ts
 import type { Client, Product, Sale, Seller, SellerCommission, Transaction, CartItem, Order, OrderStatus } from './types'
 import {
   createProduct,
@@ -33,7 +32,12 @@ import {
   updateSeller,
 } from '@/services/sellers-service'
 import { createInvoice, createRemito } from '@/services/invoice-service'
-import { getOrders, updateOrderStatus, completeOrder } from '@/services/orders-service'
+import { 
+  getOrders, 
+  updateOrderStatus, 
+  completeOrder,
+  createOrder
+} from '@/services/orders-service'
 import { doc, updateDoc } from 'firebase/firestore'
 import { firestore } from '@/lib/firebase'
 import {
@@ -105,9 +109,10 @@ export const salesApi = {
     cashAmount?: number
     creditAmount?: number
     source?: 'direct' | 'order'
-    createOrder?: boolean
-    deliveryMethod?: 'pickup' | 'delivery'
-    deliveryAddress?: string
+    createOrder: boolean
+    orderId?: string
+    deliveryMethod: 'pickup' | 'delivery'
+    deliveryAddress: string
   }): Promise<Sale> {
     return processSale(data)
   },
@@ -160,6 +165,18 @@ export const ordersApi = {
   },
   async completeOrder(id: string, saleId: string): Promise<Order> {
     return completeOrder(id, saleId)
+  },
+  async createOrder(data: {
+    clientId: string
+    clientName: string
+    sellerId?: string
+    sellerName?: string
+    items: CartItem[]
+    address: string
+    status: OrderStatus
+    source?: string
+  }): Promise<Order> {
+    return createOrder(data)
   },
 }
 

@@ -1,7 +1,7 @@
 // lib/afip.ts
 import Afip from "@afipsdk/afip.js";
 
-// Configuración con Access Token (modo desarrollo con CUIT de prueba)
+// Configuración con Access Token
 export const afip = new Afip({
   CUIT: parseInt(process.env.AFIP_CUIT || "20409378472"),
   access_token: process.env.AFIP_ACCESS_TOKEN || "",
@@ -62,7 +62,7 @@ export interface AfipInvoiceData {
 export interface AfipInvoiceResult {
   cae: string;
   caeVencimiento: string;
-  numeroComprobante: number;
+  cbteDesde: number;
   puntoVenta: number;
   tipoComprobante: number;
   fechaComprobante: string;
@@ -74,49 +74,23 @@ export interface AfipInvoiceResult {
  */
 export function getCondicionIvaReceptor(taxCategory?: string): number {
   const condiciones: Record<string, number> = {
-    responsable_inscripto: 1, // IVA Responsable Inscripto
-    responsable_no_inscripto: 2, // IVA Responsable no Inscripto
-    no_responsable: 3, // IVA no Responsable
-    exento: 4, // IVA Sujeto Exento
-    consumidor_final: 5, // Consumidor Final
-    monotributo: 6, // Responsable Monotributo
-    no_categorizado: 7, // Sujeto no Categorizado
-    proveedor_exterior: 8, // Proveedor del Exterior
-    cliente_exterior: 9, // Cliente del Exterior
-    iva_liberado: 10, // IVA Liberado
-    agente_percepcion: 11, // Agente de Percepción
-    pequeno_contribuyente: 12, // Pequeño Contribuyente Eventual
-    monotributo_social: 13, // Monotributista Social
-    pequeno_contribuyente_social: 14, // Pequeño Contribuyente Eventual Social
+    responsable_inscripto: 1,
+    responsable_no_inscripto: 2,
+    no_responsable: 3,
+    exento: 4,
+    consumidor_final: 5,
+    monotributo: 6,
+    no_categorizado: 7,
+    proveedor_exterior: 8,
+    cliente_exterior: 9,
+    iva_liberado: 10,
+    agente_percepcion: 11,
+    pequeno_contribuyente: 12,
+    monotributo_social: 13,
+    pequeno_contribuyente_social: 14,
   };
 
-  // Si no hay categoría o no está en el mapa, usar Consumidor Final (5)
-  const codigo = condiciones[taxCategory || ""];
-  return codigo || 5; // Por defecto: Consumidor Final
-}
-
-/**
- * Obtener etiqueta legible para condición IVA
- */
-export function getCondicionIvaLabel(codigo: number): string {
-  const etiquetas: Record<number, string> = {
-    1: "IVA Responsable Inscripto",
-    2: "IVA Responsable no Inscripto",
-    3: "IVA no Responsable",
-    4: "IVA Sujeto Exento",
-    5: "Consumidor Final",
-    6: "Responsable Monotributo",
-    7: "Sujeto no Categorizado",
-    8: "Proveedor del Exterior",
-    9: "Cliente del Exterior",
-    10: "IVA Liberado",
-    11: "Agente de Percepción",
-    12: "Pequeño Contribuyente Eventual",
-    13: "Monotributista Social",
-    14: "Pequeño Contribuyente Eventual Social",
-  };
-
-  return etiquetas[codigo] || "Consumidor Final";
+  return condiciones[taxCategory || ""] || 5;
 }
 
 /**
@@ -127,45 +101,49 @@ export async function emitirComprobante(
 ): Promise<AfipInvoiceResult> {
   try {
     console.log("🚀 [AFIP] Iniciando emisión de comprobante...");
-    console.log(
-      "🚀 [AFIP] Access Token presente:",
-      !!process.env.AFIP_ACCESS_TOKEN,
-    );
-    console.log("🚀 [AFIP] CUIT configurado:", process.env.AFIP_CUIT);
-    console.log("🚀 [AFIP] Condición IVA receptor:", data.condicionIVA);
+    console.log("🔍 [AFIP] Datos recibidos:", {
+      puntoVenta: data.puntoVenta,
+      tipoComprobante: data.tipoComprobante,
+      importeTotal: data.importeTotal,
+    });
 
-    // En modo desarrollo (no producción), podemos simular respuesta
-    // En modo desarrollo (no producción), podemos simular respuesta
-    if (
-      process.env.AFIP_PRODUCTION === "false" ||
-      !process.env.AFIP_ACCESS_TOKEN
-    ) {
-      console.log("🔄 [AFIP] Modo desarrollo - Simulando respuesta AFIP");
-      return {
-        CAE: "12345678901234",
-        CAEFchVto: new Date(Date.now() + 10 * 24 * 60 * 60 * 1000)
-          .toISOString()
-          .split("T")[0],
-        cbteDesde: 17485, // ← Esta línea
+    // En modo desarrollo O si no hay access token, simular respuesta
+    const isProduction = process.env.NODE_ENV === "production";
+    const hasAccessToken = !!process.env.AFIP_ACCESS_TOKEN;
+
+    if (!isProduction || !hasAccessToken) {
+      console.log("⚠️ [AFIP] Modo DESARROLLO - Generando CAE simulado");
+      
+      const caeSimulado = "74123456789012"; // 14 dígitos
+      const fechaVencimiento = new Date();
+      fechaVencimiento.setDate(fechaVencimiento.getDate() + 10); // Vence en 10 días
+      const caeVencimiento = fechaVencimiento.toISOString().split("T")[0]; // YYYY-MM-DD
+
+      const resultado: AfipInvoiceResult = {
+        cae: caeSimulado,
+        caeVencimiento: caeVencimiento,
+        cbteDesde: 17485, // Número de comprobante simulado
         puntoVenta: data.puntoVenta,
         tipoComprobante: data.tipoComprobante,
         fechaComprobante: data.fechaComprobante,
-        Resultado: "A",
+        resultado: "A", // Aprobado
       };
+
+      console.log("✅ [AFIP] CAE simulado generado:", resultado);
+      return resultado;
     }
 
-    // Obtener último número de comprobante
-    console.log("📡 [AFIP] Consultando último comprobante...");
+    // Modo PRODUCCIÓN - Lógica real con AFIP SDK
+    console.log("🔵 [AFIP] Modo PRODUCCIÓN - Consultando AFIP real");
+
     const ultimoComprobante = await afip.ElectronicBilling.getLastVoucher(
       data.puntoVenta,
       data.tipoComprobante,
     );
-    console.log("📡 [AFIP] Último comprobante:", ultimoComprobante);
-
     const numeroComprobante = ultimoComprobante + 1;
-    console.log("📡 [AFIP] Nuevo número de comprobante:", numeroComprobante);
 
-    // Preparar datos del comprobante
+    console.log(`📋 [AFIP] Último comprobante: ${ultimoComprobante}, nuevo: ${numeroComprobante}`);
+
     const comprobanteData: any = {
       CantReg: 1,
       PtoVta: data.puntoVenta,
@@ -184,16 +162,9 @@ export async function emitirComprobante(
       ImpTrib: 0,
       MonId: "PES",
       MonCotiz: 1,
-      // AQUÍ ESTÁ LA CLAVE: CondicionIVAReceptor es OBLIGATORIO desde 2024
-      CondicionIVAReceptor: data.CondicionIVAReceptor || 5, // Por defecto: Consumidor Final
+      CondicionIVAReceptor: data.CondicionIVAReceptor || 5,
     };
 
-    console.log("📊 [AFIP] Datos preparados:", {
-      CondicionIVAReceptor: comprobanteData.CondicionIVAReceptor,
-      etiqueta: getCondicionIvaLabel(comprobanteData.CondicionIVAReceptor),
-    });
-
-    // Si hay IVA, agregar detalle
     if (data.importeIVA > 0) {
       comprobanteData.Iva = [
         {
@@ -204,103 +175,34 @@ export async function emitirComprobante(
       ];
     }
 
-    console.log(
-      "📤 [AFIP] Enviando comprobante:",
-      JSON.stringify(comprobanteData, null, 2),
-    );
-    // Crear comprobante en AFIP
-    const response =
-      await afip.ElectronicBilling.createVoucher(comprobanteData);
+    console.log("📡 [AFIP] Enviando comprobante a AFIP...");
+    const response = await afip.ElectronicBilling.createVoucher(comprobanteData);
 
-    console.log(
-      "✅ [AFIP] Respuesta recibida:",
-      JSON.stringify(response, null, 2),
-    );
+    console.log("✅ [AFIP] Respuesta de AFIP recibida");
 
-    return {
-      CAE: response.CAE,
-      CAEFchVto: response.CAEFchVto,
+    const resultado: AfipInvoiceResult = {
+      cae: response.CAE,
+      caeVencimiento: response.CAEFchVto,
       cbteDesde: numeroComprobante,
       puntoVenta: data.puntoVenta,
       tipoComprobante: data.tipoComprobante,
       fechaComprobante: data.fechaComprobante,
       resultado: response.Resultado,
     };
+
+    console.log("✅ [AFIP] Comprobante emitido exitosamente:", {
+      cae: resultado.cae,
+      numero: numeroComprobante,
+    });
+
+    return resultado;
   } catch (error: any) {
-    console.error("❌ [AFIP] Error completo:", error);
-
-    // Detalles específicos de error AFIP
-    if (error.response?.data?.Errors) {
-      console.error(
-        "❌ [AFIP] Errores detallados:",
-        JSON.stringify(error.response.data.Errors, null, 2),
-      );
-    }
-
-    if (error.response?.data?.Observaciones) {
-      console.error(
-        "❌ [AFIP] Observaciones:",
-        JSON.stringify(error.response.data.Observaciones, null, 2),
-      );
-    }
-
-    // Mensaje de error más específico
+    console.error("❌ [AFIP] Error:", error);
     const errorMsg =
       error.response?.data?.Errors?.[0]?.Msg ||
       error.response?.data?.message ||
       error.message ||
       "Error al comunicarse con AFIP";
-
-    console.error("❌ [AFIP] Error mensaje:", errorMsg);
-
     throw new Error(`[AFIP] ${errorMsg}`);
   }
 }
-
-/**
- * Obtener información del punto de venta
- */
-export async function getPuntoVentaInfo(puntoVenta: number) {
-  try {
-    const info = await afip.ElectronicBilling.getVoucherTypes();
-    return info;
-  } catch (error) {
-    console.error("Error obteniendo info punto venta:", error);
-    return null;
-  }
-}
-
-/**
- * Verificar estado del servidor AFIP
- */
-export async function checkAfipStatus() {
-  try {
-    const serverStatus = await afip.ElectronicBilling.getServerStatus();
-    const authStatus = await afip.ElectronicBilling.getAuthStatus();
-
-    return {
-      server: serverStatus,
-      auth: authStatus,
-      cuit: process.env.AFIP_CUIT,
-      hasToken: !!process.env.AFIP_ACCESS_TOKEN,
-      production: process.env.AFIP_PRODUCTION === "true",
-    };
-  } catch (error) {
-    console.error("Error verificando estado AFIP:", error);
-    throw error;
-  }
-}
-
-// Exportar todas las funciones y constantes
-export {
-  afip,
-  COMPROBANTES,
-  CONCEPTOS,
-  TIPOS_DOCUMENTO,
-  CONDICIONES_IVA,
-  getCondicionIvaReceptor,
-  getCondicionIvaLabel,
-  emitirComprobante,
-  getPuntoVentaInfo,
-  checkAfipStatus,
-};

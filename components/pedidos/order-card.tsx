@@ -1,17 +1,33 @@
-//components\pedidos\order-card.tsx
+//components/pedidos/order-card.tsx
 "use client";
 
 import React from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
-import {
-  statusConfig,
-  generateOrderNumber,
-  formatDate,
-} from "@/app/pedidos/page";
+import { formatPrice } from "@/lib/utils/format";
 import type { Order } from "@/lib/types";
 import { Eye, User, Box, CheckCircle } from "lucide-react";
+import { statusConfig, statusFlow } from "@/lib/order-constants"; //
+
+const generateOrderNumber = (createdAt: Date | string, index: number) => {
+  const date = new Date(createdAt);
+  const year = date.getFullYear().toString().slice(-2);
+  const month = (date.getMonth() + 1).toString().padStart(2, "0");
+  const day = date.getDate().toString().padStart(2, "0");
+  const orderNum = (index + 1).toString().padStart(4, "0");
+  return `${year}${month}${day}-${orderNum}`;
+};
+
+const formatDate = (date: Date | string) => {
+  return new Intl.DateTimeFormat("es-AR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(date));
+};
 
 interface OrderCardProps {
   order: Order;
@@ -100,7 +116,6 @@ export function OrderCard({
     );
   }
 
-  // Card variant (mobile)
   return (
     <Card className="overflow-hidden border-gray-200 hover:shadow-md transition-shadow">
       <CardContent className="p-4">

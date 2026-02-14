@@ -65,25 +65,94 @@ export function ListaVentas({
     return "";
   };
 
-  const fmt = (amount: number) =>
-    new Intl.NumberFormat("es-AR", {
+  // REEMPLAZAR LÍNEAS 118-128 CON ESTO:
+  const fmtDate = (date: any): string => {
+    if (!date) return "-";
+
+    try {
+      let d: Date;
+
+      // Firestore Timestamp
+      if (date?.toDate && typeof date.toDate === "function") {
+        d = date.toDate();
+      }
+      // String ISO u otro formato
+      else if (typeof date === "string") {
+        d = new Date(date);
+      }
+      // Número (timestamp en ms)
+      else if (typeof date === "number") {
+        d = new Date(date);
+      }
+      // Ya es Date
+      else if (date instanceof Date) {
+        d = date;
+      }
+      // Firestore Timestamp antiguo (con seconds)
+      else if (date?.seconds) {
+        d = new Date(date.seconds * 1000);
+      } else {
+        return "-";
+      }
+
+      // Validar que sea fecha válida
+      if (isNaN(d.getTime())) {
+        return "-";
+      }
+
+      return new Intl.DateTimeFormat("es-AR", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+      }).format(d);
+    } catch (error) {
+      console.warn("Error formateando fecha:", date, error);
+      return "-";
+    }
+  };
+
+  const fmtTime = (date: any): string => {
+    if (!date) return "--:--";
+
+    try {
+      let d: Date;
+
+      if (date?.toDate && typeof date.toDate === "function") {
+        d = date.toDate();
+      } else if (typeof date === "string") {
+        d = new Date(date);
+      } else if (typeof date === "number") {
+        d = new Date(date);
+      } else if (date instanceof Date) {
+        d = date;
+      } else if (date?.seconds) {
+        d = new Date(date.seconds * 1000);
+      } else {
+        return "--:--";
+      }
+
+      if (isNaN(d.getTime())) {
+        return "--:--";
+      }
+
+      return new Intl.DateTimeFormat("es-AR", {
+        hour: "2-digit",
+        minute: "2-digit",
+      }).format(d);
+    } catch (error) {
+      return "--:--";
+    }
+  };
+  // LÍNEA 112-116 - Agregar validación:
+  const fmt = (amount: number): string => {
+    const safeAmount =
+      typeof amount === "number" && !isNaN(amount) ? amount : 0;
+    return new Intl.NumberFormat("es-AR", {
       style: "currency",
       currency: "ARS",
       minimumFractionDigits: 0,
-    }).format(amount);
-
-  const fmtDate = (date: Date) =>
-    new Intl.DateTimeFormat("es-AR", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-    }).format(new Date(date));
-
-  const fmtTime = (date: Date) =>
-    new Intl.DateTimeFormat("es-AR", {
-      hour: "2-digit",
-      minute: "2-digit",
-    }).format(new Date(date));
+    }).format(safeAmount);
+  };
 
   const hayFiltrosActivos =
     searchQuery ||

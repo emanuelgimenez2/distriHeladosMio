@@ -1,11 +1,16 @@
-//components\pedidos\success-modal.tsx
+// components/pedidos/success-modal.tsx
 "use client";
 
 import React from "react";
-import { Dialog, DialogContent } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { formatPrice } from "@/app/pedidos/page";
+import { formatPrice } from "@/lib/utils/format";
 import type { Client } from "@/lib/types";
 import { CheckCircle, ArrowRight, X, Receipt, User } from "lucide-react";
 
@@ -58,6 +63,10 @@ export function SuccessModal({
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="sm:max-w-md p-0 overflow-hidden">
+        <DialogHeader className="sr-only">
+          <DialogTitle>Pedido Completado Exitosamente</DialogTitle>
+        </DialogHeader>
+
         <div className="bg-gradient-to-br from-green-500 to-emerald-600 p-6 text-white text-center relative">
           <button
             onClick={onClose}
@@ -77,7 +86,6 @@ export function SuccessModal({
         </div>
 
         <div className="p-6 space-y-5">
-          {/* Sale Details */}
           <div className="space-y-3">
             <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
               <span className="text-gray-600 flex items-center gap-2">
@@ -112,7 +120,6 @@ export function SuccessModal({
             )}
           </div>
 
-          {/* Actions */}
           <div className="space-y-3 pt-2">
             <Button
               onClick={onGoToSale}

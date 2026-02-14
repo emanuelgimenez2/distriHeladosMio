@@ -89,7 +89,8 @@ export interface Order {
   updatedAt: Date
 }
 
-export type OrderStatus = Order['status']
+// lib/types.ts
+export type OrderStatus = 'pending' | 'preparation' | 'delivery' | 'completed';
 
 export interface Seller {
   id: string
