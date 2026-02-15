@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import chromium from "@sparticuz/chromium";
 
 export const runtime = "nodejs";
-export const maxDuration = 60; // ✅ Aumentar timeout para Vercel
+export const maxDuration = 60;
 
 export async function POST(request: NextRequest) {
   let browser;
@@ -25,28 +24,19 @@ export async function POST(request: NextRequest) {
     const isProduction = process.env.NODE_ENV === "production";
 
     if (isProduction) {
-      console.log("📄 [PDF API] Modo PRODUCCIÓN - Usando Chromium headless");
+      console.log("📄 [PDF API] Modo PRODUCCIÓN - Usando Chromium minimal");
       
-      // ✅ Configuración optimizada para Vercel
-      chromium.setHeadlessMode = true;
-      chromium.setGraphicsMode = false;
-
+      // ✅ Importar chromium-min que incluye todas las dependencias
+      const chromium = (await import("@sparticuz/chromium-min")).default;
       const puppeteerCore = (await import("puppeteer-core")).default;
       
       browser = await puppeteerCore.launch({
-        args: [
-          ...chromium.args,
-          "--disable-gpu",
-          "--disable-dev-shm-usage",
-          "--disable-setuid-sandbox",
-          "--no-sandbox",
-          "--single-process",
-          "--no-zygote",
-        ],
+        args: chromium.args,
         defaultViewport: chromium.defaultViewport,
-        executablePath: await chromium.executablePath(),
+        executablePath: await chromium.executablePath(
+          "https://github.com/Sparticuz/chromium/releases/download/v126.0.0/chromium-v126.0.0-pack.tar"
+        ),
         headless: chromium.headless,
-        ignoreHTTPSErrors: true,
       });
     } else {
       console.log("📄 [PDF API] Modo DESARROLLO - Usando Puppeteer local");
