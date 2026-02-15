@@ -1,7 +1,8 @@
 // app/api/facturacion/pdf/[saleId]/route.ts
 import { NextResponse } from "next/server";
 import { adminAuth, adminFirestore, adminStorage } from "@/lib/firebase-admin";
-import puppeteer from "puppeteer";
+import puppeteer from "puppeteer-core";
+import chromium from "@sparticuz/chromium";
 
 export const runtime = "nodejs";
 
@@ -346,9 +347,17 @@ export async function GET(
     const isElectronica = !!sale.afipData?.cae;
     const html = generateInvoiceHTML(sale, clientData, isElectronica);
 
+    // app/api/facturacion/pdf/[saleId]/route.ts - Solo cambia la parte del launch
+    const isProduction = process.env.NODE_ENV === "production";
+
     const browser = await puppeteer.launch({
+      args: isProduction
+        ? chromium.args
+        : ["--no-sandbox", "--disable-setuid-sandbox"],
+      executablePath: isProduction
+        ? await chromium.executablePath()
+        : process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
       headless: true,
-      args: ["--no-sandbox", "--disable-setuid-sandbox"],
     });
 
     const page = await browser.newPage();
