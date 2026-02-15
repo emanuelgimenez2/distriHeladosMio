@@ -145,25 +145,24 @@ export async function emitirComprobante(
     console.log(`📋 [AFIP] Último comprobante: ${ultimoComprobante}, nuevo: ${numeroComprobante}`);
 
     const comprobanteData: any = {
-      CantReg: 1,
-      PtoVta: data.puntoVenta,
-      CbteTipo: data.tipoComprobante,
-      Concepto: data.concepto,
-      DocTipo: data.tipoDocumento,
-      DocNro: data.numeroDocumento,
-      CbteDesde: numeroComprobante,
-      CbteHasta: numeroComprobante,
-      CbteFch: parseInt(data.fechaComprobante.replace(/-/g, "")),
-      ImpTotal: data.importeTotal,
-      ImpTotConc: 0,
-      ImpNeto: data.importeNeto,
-      ImpOpEx: data.importeExento || 0,
-      ImpIVA: data.importeIVA,
-      ImpTrib: 0,
-      MonId: "PES",
-      MonCotiz: 1,
-      CondicionIVAReceptor: data.CondicionIVAReceptor || 5,
-    };
+  CantReg: 1,
+  PtoVta: data.puntoVenta,
+  CbteTipo: data.tipoComprobante,
+  Concepto: data.concepto,
+  DocTipo: data.tipoDocumento,
+  DocNro: data.numeroDocumento,
+  CbteDesde: numeroComprobante,
+  CbteHasta: numeroComprobante,
+  CbteFch: parseInt(data.fechaComprobante.replace(/-/g, "")),
+  ImpTotal: data.importeTotal,
+  ImpTotConc: 0,
+  ImpNeto: data.importeNeto,
+  ImpOpEx: data.importeExento || 0,
+  ImpIVA: data.importeIVA,
+  ImpTrib: 0,
+  MonId: "PES",
+  MonCotiz: 1,
+    }
 
     if (data.importeIVA > 0) {
       comprobanteData.Iva = [
