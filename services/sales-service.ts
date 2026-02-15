@@ -1,18 +1,15 @@
 // services/sales-service.ts
 import {
-  ref,
-  get,
-  set,
-  push,
-  update,
-  serverTimestamp as rtdbTimestamp,
-} from "firebase/database";
-import { database } from "@/lib/firebase";
-import {
   collection,
   doc,
   setDoc,
-  serverTimestamp as firestoreTimestamp,
+  getDoc,
+  getDocs,
+  query,
+  where,
+  orderBy,
+  updateDoc,
+  serverTimestamp,
 } from "firebase/firestore";
 import { firestore } from "@/lib/firebase";
 import type { CartItem, Sale } from "@/lib/types";
@@ -27,59 +24,69 @@ const COMMISSIONS_PATH = "comisiones";
 const COMMISSION_RATE = 0.1;
 
 export const getSales = async (): Promise<Sale[]> => {
-  const salesRef = ref(database, SALES_PATH);
-  const snapshot = await get(salesRef);
+  const salesRef = collection(firestore, SALES_PATH);
+  const snapshot = await getDocs(query(salesRef, orderBy("createdAt", "desc")));
 
-  if (!snapshot.exists()) return [];
-
-  const data = snapshot.val();
-  return Object.entries(data).map(([id, value]: [string, any]) => ({
-    id,
-    ...value,
-    createdAt: value.createdAt ? new Date(value.createdAt) : new Date(),
-  })).sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  return snapshot.docs.map((doc) => {
+    const data = doc.data();
+    return {
+      id: doc.id,
+      ...data,
+      createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : new Date(),
+    } as Sale;
+  });
 };
 
 export const getSalesBySeller = async (sellerId: string): Promise<Sale[]> => {
-  const salesRef = ref(database, SALES_PATH);
-  const snapshot = await get(salesRef);
-  if (!snapshot.exists()) return [];
-  const data = snapshot.val();
-  return Object.entries(data)
-    .map(([id, value]: [string, any]) => ({
-      id,
-      ...value,
-      createdAt: value.createdAt ? new Date(value.createdAt) : new Date(),
-    }))
-    .filter((sale) => sale.sellerId === sellerId)
-    .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  const salesRef = collection(firestore, SALES_PATH);
+  const q = query(
+    salesRef,
+    where("sellerId", "==", sellerId),
+    orderBy("createdAt", "desc"),
+  );
+  const snapshot = await getDocs(q);
+
+  return snapshot.docs.map((doc) => {
+    const data = doc.data();
+    return {
+      id: doc.id,
+      ...data,
+      createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : new Date(),
+    } as Sale;
+  });
 };
 
 export const getSalesByClient = async (clientId: string): Promise<Sale[]> => {
-  const salesRef = ref(database, SALES_PATH);
-  const snapshot = await get(salesRef);
-  if (!snapshot.exists()) return [];
-  const data = snapshot.val();
-  return Object.entries(data)
-    .map(([id, value]: [string, any]) => ({
-      id,
-      ...value,
-      createdAt: value.createdAt ? new Date(value.createdAt) : new Date(),
-    }))
-    .filter((sale) => sale.clientId === clientId)
-    .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  const salesRef = collection(firestore, SALES_PATH);
+  const q = query(
+    salesRef,
+    where("clientId", "==", clientId),
+    orderBy("createdAt", "desc"),
+  );
+  const snapshot = await getDocs(q);
+
+  return snapshot.docs.map((doc) => {
+    const data = doc.data();
+    return {
+      id: doc.id,
+      ...data,
+      createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : new Date(),
+    } as Sale;
+  });
 };
 
 export const getSaleById = async (id: string): Promise<Sale | null> => {
-  const saleRef = ref(database, `${SALES_PATH}/${id}`);
-  const snapshot = await get(saleRef);
+  const saleRef = doc(firestore, SALES_PATH, id);
+  const snapshot = await getDoc(saleRef);
+
   if (!snapshot.exists()) return null;
-  const data = snapshot.val();
+
+  const data = snapshot.data();
   return {
-    id,
+    id: snapshot.id,
     ...data,
-    createdAt: data.createdAt ? new Date(data.createdAt) : new Date(),
-  };
+    createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : new Date(),
+  } as Sale;
 };
 
 export const generateSaleNumber = (date: Date, index: number) => {
@@ -108,14 +115,9 @@ export const processSale = async (data: {
 }): Promise<Sale> => {
   const total = data.items.reduce(
     (acc, item) => acc + item.product.price * item.quantity,
-    0
+    0,
   );
 
-  // Generar ID único para Realtime y Firestore
-  const newSaleRef = push(ref(database, SALES_PATH));
-  const saleId = newSaleRef.key!;
-
-  // Obtener contador para número de venta
   const sales = await getSales();
   const saleNumber = generateSaleNumber(new Date(), sales.length);
 
@@ -124,10 +126,10 @@ export const processSale = async (data: {
   let clientAddress = data.deliveryAddress;
 
   if (data.clientId) {
-    const clientRef = ref(database, `${CLIENTS_PATH}/${data.clientId}`);
-    const clientSnap = await get(clientRef);
+    const clientRef = doc(firestore, CLIENTS_PATH, data.clientId);
+    const clientSnap = await getDoc(clientRef);
     if (clientSnap.exists()) {
-      const clientData = clientSnap.val();
+      const clientData = clientSnap.data();
       resolvedClientName = clientData.name ?? resolvedClientName;
       resolvedTaxCategory = clientData.taxCategory;
       if (data.deliveryMethod === "delivery" && !data.deliveryAddress) {
@@ -136,7 +138,9 @@ export const processSale = async (data: {
     }
   }
 
-  // Payload para Realtime Database
+  const saleRef = doc(collection(firestore, SALES_PATH));
+  const saleId = saleRef.id;
+
   const salePayload = {
     saleNumber,
     clientId: data.clientId ?? null,
@@ -162,52 +166,20 @@ export const processSale = async (data: {
     invoiceStatus: "pending",
     deliveryMethod: data.deliveryMethod,
     deliveryAddress: clientAddress,
-    createdAt: new Date().toISOString(),
+    createdAt: serverTimestamp(),
   };
 
-  // Payload para Firestore (mismos datos, pero con timestamp de Firestore)
-  const firestorePayload = {
-    saleNumber,
-    clientId: data.clientId ?? null,
-    clientName: resolvedClientName ?? null,
-    clientPhone: data.clientPhone ?? null,
-    clientTaxCategory: resolvedTaxCategory ?? null,
-    sellerId: data.sellerId ?? null,
-    sellerName: data.sellerName ?? null,
-    source: data.source,
-    items: data.items.map((item) => ({
-      productId: item.product.id,
-      quantity: item.quantity,
-      price: item.product.price,
-      name: item.product.name,
-    })),
-    total,
-    paymentType: data.paymentType,
-    cashAmount: data.cashAmount ?? null,
-    creditAmount: data.creditAmount ?? null,
-    orderId: data.orderId ?? null,
-    status: "completed",
-    invoiceEmitted: false,
-    invoiceStatus: "pending",
-    deliveryMethod: data.deliveryMethod,
-    deliveryAddress: clientAddress,
-    createdAt: firestoreTimestamp(),
-  };
-
-  // Ejecutar todas las operaciones atómicamente en Realtime
-  const updates: Record<string, any> = {};
-
-  // Crear venta en Realtime
-  updates[`${SALES_PATH}/${saleId}`] = salePayload;
+  await setDoc(saleRef, salePayload);
 
   // Actualizar stock
   for (const item of data.items) {
-    const productRef = ref(database, `${PRODUCTS_PATH}/${item.product.id}`);
-    const productSnap = await get(productRef);
+    const productRef = doc(firestore, PRODUCTS_PATH, item.product.id);
+    const productSnap = await getDoc(productRef);
     if (productSnap.exists()) {
-      const currentStock = productSnap.val().stock || 0;
-      updates[`${PRODUCTS_PATH}/${item.product.id}/stock`] =
-        currentStock - item.quantity;
+      const currentStock = productSnap.data().stock || 0;
+      await updateDoc(productRef, {
+        stock: currentStock - item.quantity,
+      });
     }
   }
 
@@ -216,36 +188,36 @@ export const processSale = async (data: {
     data.paymentType === "credit"
       ? total
       : data.paymentType === "mixed"
-      ? data.creditAmount ?? 0
-      : 0;
+        ? (data.creditAmount ?? 0)
+        : 0;
 
   if (amountToCredit > 0 && data.clientId) {
-    const clientRef = ref(database, `${CLIENTS_PATH}/${data.clientId}`);
-    const clientSnap = await get(clientRef);
+    const clientRef = doc(firestore, CLIENTS_PATH, data.clientId);
+    const clientSnap = await getDoc(clientRef);
     if (clientSnap.exists()) {
-      const currentBalance = clientSnap.val().currentBalance || 0;
-      updates[`${CLIENTS_PATH}/${data.clientId}/currentBalance`] =
-        currentBalance + amountToCredit;
+      const currentBalance = clientSnap.data().currentBalance || 0;
+      await updateDoc(clientRef, {
+        currentBalance: currentBalance + amountToCredit,
+      });
     }
 
-    // Crear transacción
-    const newTransactionRef = push(ref(database, TRANSACTIONS_PATH));
-    updates[`${TRANSACTIONS_PATH}/${newTransactionRef.key}`] = {
+    const transactionRef = doc(collection(firestore, TRANSACTIONS_PATH));
+    await setDoc(transactionRef, {
       clientId: data.clientId,
       type: "debt",
       amount: amountToCredit,
       description: `Venta #${saleNumber}`,
-      date: new Date().toISOString(),
+      date: serverTimestamp(),
       saleId: saleId,
       saleNumber,
-    };
+    });
   }
 
   // Comisión para vendedor
   if (data.sellerId) {
     const commissionAmount = total * COMMISSION_RATE;
-    const newCommissionRef = push(ref(database, COMMISSIONS_PATH));
-    updates[`${COMMISSIONS_PATH}/${newCommissionRef.key}`] = {
+    const commissionRef = doc(collection(firestore, COMMISSIONS_PATH));
+    await setDoc(commissionRef, {
       sellerId: data.sellerId,
       saleId: saleId,
       saleNumber,
@@ -253,28 +225,20 @@ export const processSale = async (data: {
       commissionRate: COMMISSION_RATE * 100,
       commissionAmount,
       isPaid: false,
-      createdAt: new Date().toISOString(),
-    };
+      createdAt: serverTimestamp(),
+    });
 
-    const sellerRef = ref(database, `${SELLERS_PATH}/${data.sellerId}`);
-    const sellerSnap = await get(sellerRef);
+    const sellerRef = doc(firestore, SELLERS_PATH, data.sellerId);
+    const sellerSnap = await getDoc(sellerRef);
     if (sellerSnap.exists()) {
-      const sellerData = sellerSnap.val();
-      updates[`${SELLERS_PATH}/${data.sellerId}/totalSales`] =
-        (sellerData.totalSales || 0) + total;
-      updates[`${SELLERS_PATH}/${data.sellerId}/totalCommission`] =
-        (sellerData.totalCommission || 0) + commissionAmount;
+      const sellerData = sellerSnap.data();
+      await updateDoc(sellerRef, {
+        totalSales: (sellerData.totalSales || 0) + total,
+        totalCommission: (sellerData.totalCommission || 0) + commissionAmount,
+      });
     }
   }
 
-  // Ejecutar actualizaciones en Realtime
-  await update(ref(database), updates);
-
-  // Crear documento en Firestore
-  const firestoreDocRef = doc(collection(firestore, "ventas"), saleId);
-  await setDoc(firestoreDocRef, firestorePayload);
-
-  // Retornar la venta creada
   return {
     id: saleId,
     saleNumber,
@@ -307,30 +271,17 @@ export const updateSaleInvoice = async (
     invoicePdfUrl: string;
     invoiceWhatsappUrl?: string;
     afipData?: any;
-  }
+  },
 ) => {
-  // Actualizar en Realtime
-  const saleRef = ref(database, `${SALES_PATH}/${saleId}`);
-  await update(saleRef, {
+  const saleRef = doc(firestore, SALES_PATH, saleId);
+  await updateDoc(saleRef, {
     invoiceEmitted: true,
     invoiceNumber: invoiceData.invoiceNumber,
     invoicePdfUrl: invoiceData.invoicePdfUrl,
     invoiceWhatsappUrl: invoiceData.invoiceWhatsappUrl || null,
     invoiceStatus: "emitted",
     afipData: invoiceData.afipData || null,
-    invoiceEmittedAt: new Date().toISOString(),
-  });
-
-  // Actualizar en Firestore
-  const firestoreRef = doc(firestore, "ventas", saleId);
-  await updateDoc(firestoreRef, {
-    invoiceEmitted: true,
-    invoiceNumber: invoiceData.invoiceNumber,
-    invoicePdfUrl: invoiceData.invoicePdfUrl,
-    invoiceWhatsappUrl: invoiceData.invoiceWhatsappUrl || null,
-    invoiceStatus: "emitted",
-    afipData: invoiceData.afipData || null,
-    invoiceEmittedAt: new Date().toISOString(),
+    invoiceEmittedAt: serverTimestamp(),
   });
 };
 
@@ -339,22 +290,13 @@ export const updateSaleRemito = async (
   remitoData: {
     remitoNumber: string;
     remitoPdfUrl: string;
-  }
+  },
 ) => {
-  // Actualizar en Realtime
-  const saleRef = ref(database, `${SALES_PATH}/${saleId}`);
-  await update(saleRef, {
+  const saleRef = doc(firestore, SALES_PATH, saleId);
+  await updateDoc(saleRef, {
     remitoNumber: remitoData.remitoNumber,
     remitoPdfUrl: remitoData.remitoPdfUrl,
-    remitoGeneratedAt: new Date().toISOString(),
-  });
-
-  // Actualizar en Firestore
-  const firestoreRef = doc(firestore, "ventas", saleId);
-  await updateDoc(firestoreRef, {
-    remitoNumber: remitoData.remitoNumber,
-    remitoPdfUrl: remitoData.remitoPdfUrl,
-    remitoGeneratedAt: new Date().toISOString(),
+    remitoGeneratedAt: serverTimestamp(),
   });
 };
 

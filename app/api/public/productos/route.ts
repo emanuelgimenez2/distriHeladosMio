@@ -1,14 +1,15 @@
-import { NextResponse } from 'next/server'
-import { adminDb } from '@/lib/firebase-admin'
+// app/api/public/productos/route.ts
+import { NextResponse } from "next/server";
+import { adminFirestore } from "@/lib/firebase-admin";
 
-export const runtime = 'nodejs'
+export const runtime = "nodejs";
 
 export async function GET() {
-  const snapshot = await adminDb.collection('productos').get()
-  
+  const snapshot = await adminFirestore.collection("productos").get();
+
   const products = snapshot.docs
     .map((doc) => {
-      const data = doc.data()
+      const data = doc.data();
       return {
         id: doc.id,
         name: data.name,
@@ -17,16 +18,15 @@ export async function GET() {
         stock: data.stock,
         imageUrl: data.imageUrl,
         category: data.category,
-        createdAt: data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : null,
-        
-        // ✅ NUEVOS CAMPOS:
-        base: data.base ?? 'crema',
+        createdAt: data.createdAt?.toDate
+          ? data.createdAt.toDate().toISOString()
+          : null,
+        base: data.base ?? "crema",
         sinTacc: data.sinTacc ?? false,
         disabled: data.disabled ?? false,
-      }
+      };
     })
-    // ✅ FILTRAR productos deshabilitados
-    .filter(product => product.disabled !== true)
+    .filter((product) => product.disabled !== true);
 
-  return NextResponse.json({ products })
+  return NextResponse.json({ products });
 }

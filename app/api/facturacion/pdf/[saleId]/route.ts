@@ -1,5 +1,6 @@
+// app/api/facturacion/pdf/[saleId]/route.ts
 import { NextResponse } from "next/server";
-import { adminAuth, adminDb, adminStorage } from "@/lib/firebase-admin";
+import { adminAuth, adminFirestore, adminStorage } from "@/lib/firebase-admin";
 import puppeteer from "puppeteer";
 
 export const runtime = "nodejs";
@@ -48,10 +49,13 @@ const getPaymentTypeLabel = (type: string) => {
   return types[type] || type;
 };
 
-// Función para generar el HTML
-function generateInvoiceHTML(sale: any, clientData: any, isElectronica: boolean) {
+function generateInvoiceHTML(
+  sale: any,
+  clientData: any,
+  isElectronica: boolean,
+) {
   const items = sale.items || [];
-  
+
   return `
 <!DOCTYPE html>
 <html>
@@ -178,7 +182,9 @@ function generateInvoiceHTML(sale: any, clientData: any, isElectronica: boolean)
         </tr>
       </thead>
       <tbody>
-        ${items.map((item: any) => `
+        ${items
+          .map(
+            (item: any) => `
           <tr>
             <td class="text-center">${item.quantity}</td>
             <td>${item.name}</td>
@@ -186,10 +192,16 @@ function generateInvoiceHTML(sale: any, clientData: any, isElectronica: boolean)
             <td class="text-right">21.00</td>
             <td class="text-right">${formatCurrency(item.price * item.quantity)}</td>
           </tr>
-        `).join("")}
-        ${Array.from({ length: Math.max(0, 10 - items.length) }).map(() => `
+        `,
+          )
+          .join("")}
+        ${Array.from({ length: Math.max(0, 10 - items.length) })
+          .map(
+            () => `
           <tr><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td></tr>
-        `).join("")}
+        `,
+          )
+          .join("")}
       </tbody>
     </table>
   </div>
@@ -208,7 +220,9 @@ function generateInvoiceHTML(sale: any, clientData: any, isElectronica: boolean)
         <span>TOTAL:</span>
         <span>${formatCurrency(sale.total || 0)}</span>
       </div>
-      ${sale.paymentType === "mixed" ? `
+      ${
+        sale.paymentType === "mixed"
+          ? `
         <div class="border-t mt-2 text-xs">
           <div style="display: flex; justify-content: space-between;">
             <span>Efectivo:</span>
@@ -219,11 +233,15 @@ function generateInvoiceHTML(sale: any, clientData: any, isElectronica: boolean)
             <span>${formatCurrency(sale.creditAmount || 0)}</span>
           </div>
         </div>
-      ` : ""}
+      `
+          : ""
+      }
     </div>
   </div>
 
-  ${isElectronica ? `
+  ${
+    isElectronica
+      ? `
     <div class="border-box p-4">
       <div class="grid-2">
         <div>
@@ -239,20 +257,26 @@ function generateInvoiceHTML(sale: any, clientData: any, isElectronica: boolean)
         </div>
       </div>
     </div>
-  ` : `
+  `
+      : `
     <div class="border-box p-4 text-center">
       <p class="font-bold text-red">DOCUMENTO NO VALIDO COMO FACTURA</p>
       <p class="text-xs text-gray">Este documento es un presupuesto. Solicite factura electrónica si la requiere.</p>
     </div>
-  `}
+  `
+  }
 
   <div class="mt-4 text-center text-xs text-gray">
-    ${isElectronica ? `
+    ${
+      isElectronica
+        ? `
       <p>Comprobante autorizado por AFIP</p>
       <p>Esta factura contribuye al desarrollo del pais. El pago de los impuestos es obligacion de todos.</p>
-    ` : `
+    `
+        : `
       <p>Documento interno - No válido fiscalmente</p>
-    `}
+    `
+    }
   </div>
 </body>
 </html>
@@ -276,7 +300,6 @@ export async function GET(
     const { saleId } = await context.params;
     console.log("📄 Generando PDF para venta:", saleId);
 
-    // Verificar si ya existe el PDF en Storage
     const bucket = adminStorage.bucket();
     const filePath = `facturas/${saleId}.pdf`;
     const file = bucket.file(filePath);
@@ -287,18 +310,19 @@ export async function GET(
         console.log("📄 PDF ya existe en Storage, sirviendo...");
         const [url] = await file.getSignedUrl({
           action: "read",
-          expires: Date.now() + 60 * 60 * 1000, // 1 hora
+          expires: Date.now() + 60 * 60 * 1000,
         });
-        
-        // Redirigir a la URL firmada
+
         return NextResponse.redirect(url);
       }
     } catch (storageError) {
       console.log("⚠️ No se pudo verificar Storage, generando nuevo PDF...");
     }
 
-    // Obtener datos de la venta
-    const saleSnapshot = await adminDb.collection("ventas").doc(saleId).get();
+    const saleSnapshot = await adminFirestore
+      .collection("ventas")
+      .doc(saleId)
+      .get();
     if (!saleSnapshot.exists) {
       return NextResponse.json(
         { error: "Venta no encontrada" },
@@ -310,7 +334,7 @@ export async function GET(
 
     let clientData: any = {};
     if (sale.clientId) {
-      const clientSnapshot = await adminDb
+      const clientSnapshot = await adminFirestore
         .collection("clientes")
         .doc(sale.clientId)
         .get();
@@ -320,11 +344,8 @@ export async function GET(
     }
 
     const isElectronica = !!sale.afipData?.cae;
-
-    // Generar HTML
     const html = generateInvoiceHTML(sale, clientData, isElectronica);
 
-    // Generar PDF con Puppeteer
     const browser = await puppeteer.launch({
       headless: true,
       args: ["--no-sandbox", "--disable-setuid-sandbox"],
@@ -341,7 +362,6 @@ export async function GET(
 
     await browser.close();
 
-    // Subir a Firebase Storage
     await file.save(pdfBuffer, {
       metadata: {
         contentType: "application/pdf",
@@ -353,14 +373,12 @@ export async function GET(
       },
     });
 
-    // Actualizar la venta con la URL del PDF
     const publicUrl = `https://storage.googleapis.com/${bucket.name}/${filePath}`;
-    await adminDb.collection("ventas").doc(saleId).update({
+    await adminFirestore.collection("ventas").doc(saleId).update({
       invoicePdfUrl: publicUrl,
       invoicePdfGeneratedAt: new Date().toISOString(),
     });
 
-    // Devolver el PDF
     return new NextResponse(pdfBuffer, {
       headers: {
         "Content-Type": "application/pdf",
