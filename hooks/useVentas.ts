@@ -701,6 +701,7 @@ export function useVentas() {
   };
 
   // ==================== EMITIR DOCUMENTO ====================
+  // hooks/useVentas.ts - Reemplaza la función emitirDocumento completa
   const emitirDocumento = async () => {
     if (!ventaParaEmitir) return;
     setEmitiendo(true);
@@ -713,8 +714,38 @@ export function useVentas() {
       if (!user) throw new Error("Usuario no autenticado");
       const token = await user.getIdToken();
 
-      // hooks/useVentas.ts - línea 257 aproximadamente
       if (tipoDocumento === "boleta") {
+        // Obtener datos del cliente desde Firestore si existe clientId
+        let taxCategory =
+          ventaParaEmitir.clientTaxCategory || "consumidor_final";
+        let clientName = ventaParaEmitir.clientName || "Cliente";
+        let clientCuit = ventaParaEmitir.clientCuit || "";
+        let clientPhone = ventaParaEmitir.clientPhone || "";
+        let clientAddress = ventaParaEmitir.clientAddress || "";
+
+        if (ventaParaEmitir.clientId) {
+          try {
+            const clientRef = doc(db, "clientes", ventaParaEmitir.clientId);
+            const clientSnap = await getDoc(clientRef);
+            if (clientSnap.exists()) {
+              const clientData = clientSnap.data();
+              taxCategory = clientData.taxCategory || taxCategory;
+              clientName = clientData.name || clientName;
+              clientCuit = clientData.cuit || clientCuit;
+              clientPhone = clientData.phone || clientPhone;
+              clientAddress = clientData.address || clientAddress;
+            }
+          } catch (error) {
+            console.warn("No se pudo obtener datos del cliente:", error);
+          }
+        }
+
+        console.log("📋 Datos del cliente para AFIP:", {
+          name: clientName,
+          taxCategory,
+          cuit: clientCuit,
+        });
+
         // 1. Emitir en AFIP
         const afipResponse = await fetch("/api/ventas/emitir", {
           method: "POST",
@@ -725,20 +756,11 @@ export function useVentas() {
           body: JSON.stringify({
             saleId: ventaParaEmitir.id,
             client: {
-              name:
-                ventaParaEmitir.clientData?.name || ventaParaEmitir.clientName,
-              phone:
-                ventaParaEmitir.clientData?.phone ||
-                ventaParaEmitir.clientPhone,
-              cuit:
-                ventaParaEmitir.clientData?.cuit || ventaParaEmitir.clientCuit,
-              address:
-                ventaParaEmitir.clientData?.address ||
-                ventaParaEmitir.clientAddress,
-              taxCategory:
-                ventaParaEmitir.clientData?.taxCategory ||
-                ventaParaEmitir.clientTaxCategory ||
-                "consumidor_final",
+              name: clientName,
+              phone: clientPhone,
+              cuit: clientCuit,
+              address: clientAddress,
+              taxCategory: taxCategory,
             },
             emitirAfip: true,
           }),
