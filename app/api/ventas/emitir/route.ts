@@ -85,8 +85,17 @@ export async function POST(request: NextRequest) {
         cliente_exterior: 9,
       };
 
+      // Validar CUIT (debe tener 11 dígitos numéricos)
+      const validarCUIT = (cuit: string): boolean => {
+        if (!cuit) return false;
+        const cuitLimpio = cuit.replace(/\D/g, "");
+        return cuitLimpio.length === 11;
+      };
+
+      const cuitValido = validarCUIT(clientData.cuit);
       const esConsumidorFinal =
-        !clientData.cuit || clientData.taxCategory === "consumidor_final";
+        !cuitValido || clientData.taxCategory === "consumidor_final";
+
       const tipoDoc = esConsumidorFinal ? 99 : 80;
       const nroDoc = esConsumidorFinal
         ? 0
