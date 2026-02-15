@@ -22,21 +22,33 @@ export async function POST(request: NextRequest) {
     console.log("📄 [PDF API] Lanzando Puppeteer...");
 
     const isProduction = process.env.NODE_ENV === "production";
+    const isVercel = !!process.env.VERCEL;
 
-    if (isProduction) {
-      console.log("📄 [PDF API] Modo PRODUCCIÓN - Usando Chromium minimal");
+    if (isProduction && isVercel) {
+      console.log("📄 [PDF API] Modo VERCEL - Configuración especial de Chromium");
       
-      // ✅ Importar chromium-min que incluye todas las dependencias
-      const chromium = (await import("@sparticuz/chromium-min")).default;
+      const chromium = (await import("@sparticuz/chromium")).default;
       const puppeteerCore = (await import("puppeteer-core")).default;
-      
+
+      const executablePath = await chromium.executablePath(
+        `https://github.com/Sparticuz/chromium/releases/download/v131.0.1/chromium-v131.0.1-pack.tar`
+      );
+
+      console.log("📄 [PDF API] Executable path:", executablePath);
+
       browser = await puppeteerCore.launch({
-        args: chromium.args,
+        args: [
+          ...chromium.args,
+          "--disable-gpu",
+          "--disable-dev-shm-usage",
+          "--disable-setuid-sandbox",
+          "--no-sandbox",
+          "--no-zygote",
+          "--single-process",
+        ],
         defaultViewport: chromium.defaultViewport,
-        executablePath: await chromium.executablePath(
-          "https://github.com/Sparticuz/chromium/releases/download/v126.0.0/chromium-v126.0.0-pack.tar"
-        ),
-        headless: chromium.headless,
+        executablePath: executablePath,
+        headless: true,
       });
     } else {
       console.log("📄 [PDF API] Modo DESARROLLO - Usando Puppeteer local");
@@ -59,7 +71,7 @@ export async function POST(request: NextRequest) {
 
     await page.setContent(html, {
       waitUntil: ["load", "networkidle0"],
-      timeout: 30000, // ✅ Timeout de 30 segundos
+      timeout: 30000,
     });
 
     console.log("📄 [PDF API] Generando PDF...");
@@ -80,10 +92,6 @@ export async function POST(request: NextRequest) {
 
     const pdfBase64 = Buffer.from(pdfBuffer).toString("base64");
 
-    console.log(
-      `✅ [PDF API] Base64 generado, longitud: ${pdfBase64.length} caracteres`,
-    );
-
     await browser.close();
 
     return NextResponse.json({
@@ -94,7 +102,6 @@ export async function POST(request: NextRequest) {
     });
   } catch (error: any) {
     console.error("❌ [PDF API] Error:", error);
-    console.error("❌ [PDF API] Stack:", error.stack);
 
     if (browser) {
       try {
@@ -108,7 +115,6 @@ export async function POST(request: NextRequest) {
       {
         error: error.message || "Error generando PDF",
         details: error.toString(),
-        stack: process.env.NODE_ENV === "development" ? error.stack : undefined,
       },
       { status: 500 },
     );
