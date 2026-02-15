@@ -69,13 +69,21 @@ export async function POST(request: NextRequest) {
         cliente_exterior: 9,
       };
 
+      // Determinar tipo de cliente
       const esConsumidorFinal = !clientData.cuit || clientData.taxCategory === "consumidor_final";
+      const esResponsableInscripto = clientData.taxCategory === "responsable_inscripto";
+      
+      // ✅ CAMBIO IMPORTANTE: Tipo de comprobante dinámico
+      // Factura A (1) para Responsables Inscriptos
+      // Factura B (6) para Consumidores Finales, Monotributistas, etc.
+      const tipoComprobante = esResponsableInscripto ? 1 : 6;
+      
       const tipoDoc = esConsumidorFinal ? 99 : 80;
-      const nroDoc = esConsumidorFinal ? 0 : parseInt(clientData.cuit.replace(/\D/g, ""));
+      const nroDoc = esConsumidorFinal ? 0 : parseInt(clientData.cuit?.replace(/\D/g, "") || "0");
 
       const comprobanteData = {
         puntoVenta: 1,
-        tipoComprobante: 6,
+        tipoComprobante: tipoComprobante, // Dinámico según cliente
         fechaComprobante: new Date().toISOString().split("T")[0],
         concepto: 1,
         tipoDocumento: tipoDoc,
@@ -86,6 +94,14 @@ export async function POST(request: NextRequest) {
         importeExento: 0,
         CondicionIVAReceptor: taxCategoryMapping[clientData.taxCategory] || 5,
       };
+
+      console.log("📋 Datos del comprobante a emitir:", {
+        tipoComprobante: tipoComprobante === 1 ? "Factura A" : "Factura B",
+        cliente: clientData.name,
+        taxCategory: clientData.taxCategory,
+        condicionIVA: comprobanteData.CondicionIVAReceptor,
+        total: importeTotal,
+      });
 
       try {
         afipResponse = await emitirComprobante(comprobanteData);
@@ -111,30 +127,32 @@ export async function POST(request: NextRequest) {
       },
       updatedAt: new Date().toISOString(),
     };
-if (afipResponse) {
-  updateData.invoiceNumber = invoiceNumber;
-  updateData.invoiceEmitted = true;
-  updateData.invoiceStatus = "emitted";
-  updateData.afipData = {
-    cae: afipResponse.cae,                    // ✅ minúscula
-    caeVencimiento: afipResponse.caeVencimiento, // ✅ ya estaba correcto
-    tipoComprobante: 6,
-    puntoVenta: 1,
-    numeroComprobante: afipResponse.cbteDesde,  // ✅ minúscula
-  };
-}
+
+    if (afipResponse) {
+      updateData.invoiceNumber = invoiceNumber;
+      updateData.invoiceEmitted = true;
+      updateData.invoiceStatus = "emitted";
+      updateData.afipData = {
+        cae: afipResponse.cae,
+        caeVencimiento: afipResponse.caeVencimiento,
+        tipoComprobante: afipResponse.tipoComprobante,
+        puntoVenta: afipResponse.puntoVenta,
+        numeroComprobante: afipResponse.cbteDesde,
+      };
+    }
 
     await ventaRef.update(updateData);
 
- return NextResponse.json({
-  success: true,
-  invoiceNumber,
-  afipData: afipResponse ? {
-    cae: afipResponse.cae,                    // ✅ minúscula
-    caeVencimiento: afipResponse.caeVencimiento, // ✅ ya estaba correcto
-  } : null,
-  message: emitirAfip ? "Factura emitida en AFIP" : "Datos actualizados",
-});
+    return NextResponse.json({
+      success: true,
+      invoiceNumber,
+      afipData: afipResponse ? {
+        cae: afipResponse.cae,
+        caeVencimiento: afipResponse.caeVencimiento,
+        tipoComprobante: afipResponse.tipoComprobante === 1 ? "Factura A" : "Factura B",
+      } : null,
+      message: emitirAfip ? "Factura emitida en AFIP" : "Datos actualizados",
+    });
 
   } catch (error: any) {
     console.error("Error:", error);

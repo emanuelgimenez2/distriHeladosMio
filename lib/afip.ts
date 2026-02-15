@@ -104,7 +104,9 @@ export async function emitirComprobante(
     console.log("🔍 [AFIP] Datos recibidos:", {
       puntoVenta: data.puntoVenta,
       tipoComprobante: data.tipoComprobante,
+      tipoComprobanteNombre: data.tipoComprobante === 1 ? "Factura A" : data.tipoComprobante === 6 ? "Factura B" : "Otro",
       importeTotal: data.importeTotal,
+      condicionIVAReceptor: data.CondicionIVAReceptor,
     });
 
     // En modo desarrollo O si no hay access token, simular respuesta
@@ -145,23 +147,30 @@ export async function emitirComprobante(
     console.log(`📋 [AFIP] Último comprobante: ${ultimoComprobante}, nuevo: ${numeroComprobante}`);
 
     const comprobanteData: any = {
-  CantReg: 1,
-  PtoVta: data.puntoVenta,
-  CbteTipo: data.tipoComprobante,
-  Concepto: data.concepto,
-  DocTipo: data.tipoDocumento,
-  DocNro: data.numeroDocumento,
-  CbteDesde: numeroComprobante,
-  CbteHasta: numeroComprobante,
-  CbteFch: parseInt(data.fechaComprobante.replace(/-/g, "")),
-  ImpTotal: data.importeTotal,
-  ImpTotConc: 0,
-  ImpNeto: data.importeNeto,
-  ImpOpEx: data.importeExento || 0,
-  ImpIVA: data.importeIVA,
-  ImpTrib: 0,
-  MonId: "PES",
-  MonCotiz: 1,
+      CantReg: 1,
+      PtoVta: data.puntoVenta,
+      CbteTipo: data.tipoComprobante,
+      Concepto: data.concepto,
+      DocTipo: data.tipoDocumento,
+      DocNro: data.numeroDocumento,
+      CbteDesde: numeroComprobante,
+      CbteHasta: numeroComprobante,
+      CbteFch: parseInt(data.fechaComprobante.replace(/-/g, "")),
+      ImpTotal: data.importeTotal,
+      ImpTotConc: 0,
+      ImpNeto: data.importeNeto,
+      ImpOpEx: data.importeExento || 0,
+      ImpIVA: data.importeIVA,
+      ImpTrib: 0,
+      MonId: "PES",
+      MonCotiz: 1,
+    };
+
+    // ✅ CAMBIO CRÍTICO: Solo agregar condición IVA para Factura A (tipo 1)
+    // Las Facturas B no requieren este campo
+    if (data.tipoComprobante === 1 && data.CondicionIVAReceptor) {
+      comprobanteData.CondIVA = data.CondicionIVAReceptor;
+      console.log("📝 [AFIP] Agregando condición IVA del receptor:", data.CondicionIVAReceptor);
     }
 
     if (data.importeIVA > 0) {
@@ -175,6 +184,8 @@ export async function emitirComprobante(
     }
 
     console.log("📡 [AFIP] Enviando comprobante a AFIP...");
+    console.log("📄 [AFIP] Estructura completa:", JSON.stringify(comprobanteData, null, 2));
+    
     const response = await afip.ElectronicBilling.createVoucher(comprobanteData);
 
     console.log("✅ [AFIP] Respuesta de AFIP recibida");
@@ -192,6 +203,7 @@ export async function emitirComprobante(
     console.log("✅ [AFIP] Comprobante emitido exitosamente:", {
       cae: resultado.cae,
       numero: numeroComprobante,
+      tipo: data.tipoComprobante === 1 ? "Factura A" : "Factura B",
     });
 
     return resultado;
