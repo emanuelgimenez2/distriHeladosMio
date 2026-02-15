@@ -142,10 +142,14 @@ export function useVentas() {
   });
 
   const [modalDetalleAbierto, setModalDetalleAbierto] = useState(false);
-  const [ventaSeleccionada, setVentaSeleccionada] = useState<Venta | null>(null);
+  const [ventaSeleccionada, setVentaSeleccionada] = useState<Venta | null>(
+    null,
+  );
   const [modalEmitirAbierto, setModalEmitirAbierto] = useState(false);
   const [ventaParaEmitir, setVentaParaEmitir] = useState<Venta | null>(null);
-  const [tipoDocumento, setTipoDocumento] = useState<"boleta" | "remito">("boleta");
+  const [tipoDocumento, setTipoDocumento] = useState<"boleta" | "remito">(
+    "boleta",
+  );
   const [emitiendo, setEmitiendo] = useState(false);
 
   // Cargar ventas
@@ -175,7 +179,9 @@ export function useVentas() {
   const ventasFiltradas = ventas.filter((venta) => {
     const coincideBusqueda =
       !filtros.busqueda ||
-      venta.clientName?.toLowerCase().includes(filtros.busqueda.toLowerCase()) ||
+      venta.clientName
+        ?.toLowerCase()
+        .includes(filtros.busqueda.toLowerCase()) ||
       venta.id.toLowerCase().includes(filtros.busqueda.toLowerCase()) ||
       venta.invoiceNumber?.includes(filtros.busqueda);
 
@@ -198,7 +204,12 @@ export function useVentas() {
     const coincideTipoPago =
       filtros.tipoPago === "todos" || venta.paymentType === filtros.tipoPago;
 
-    return coincideBusqueda && coincideFechaDesde && coincideFechaHasta && coincideTipoPago;
+    return (
+      coincideBusqueda &&
+      coincideFechaDesde &&
+      coincideFechaHasta &&
+      coincideTipoPago
+    );
   });
 
   const actualizarFiltros = (nuevosFiltros: Partial<FiltrosVentas>) => {
@@ -245,44 +256,56 @@ export function useVentas() {
   const generarPdfCompleto = async (
     venta: Venta,
     tipo: "boleta" | "remito",
-    afipData?: any
+    afipData?: any,
   ): Promise<string> => {
     console.log(`📄 Generando PDF ${tipo} para venta ${venta.id}`);
 
     try {
       // Construir el HTML completo del documento
-      const htmlContent = tipo === "boleta" 
-        ? generarHtmlBoleta(venta, afipData)
-        : generarHtmlRemito(venta);
+      const htmlContent =
+        tipo === "boleta"
+          ? generarHtmlBoleta(venta, afipData)
+          : generarHtmlRemito(venta);
 
-      console.log(`📄 HTML generado, longitud: ${htmlContent.length} caracteres`);
+      console.log(
+        `📄 HTML generado, longitud: ${htmlContent.length} caracteres`,
+      );
 
       // Llamar a la API que usa Puppeteer (server-side)
       const response = await fetch("/api/generate-pdf", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
+        body: JSON.stringify({
           html: htmlContent,
-          filename: tipo === "boleta" 
-            ? `boleta-${venta.invoiceNumber || venta.id}.pdf`
-            : `remito-${venta.remitoNumber || venta.id}.pdf`
+          filename:
+            tipo === "boleta"
+              ? `boleta-${venta.invoiceNumber || venta.id}.pdf`
+              : `remito-${venta.remitoNumber || venta.id}.pdf`,
         }),
       });
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: "Error desconocido" }));
+        const errorData = await response
+          .json()
+          .catch(() => ({ error: "Error desconocido" }));
         throw new Error(errorData.error || `Error HTTP ${response.status}`);
       }
 
       const data = await response.json();
-      
+
       if (!data.pdf) {
         throw new Error("La API no devolvió el PDF");
       }
 
-      console.log(`✅ PDF ${tipo} generado correctamente, tamaño: ${data.pdf.length} caracteres`);
-      console.log(`🔍 Primeros 100 caracteres del base64: ${data.pdf.substring(0, 100)}`);
-      console.log(`🔍 Últimos 20 caracteres del base64: ${data.pdf.substring(data.pdf.length - 20)}`);
+      console.log(
+        `✅ PDF ${tipo} generado correctamente, tamaño: ${data.pdf.length} caracteres`,
+      );
+      console.log(
+        `🔍 Primeros 100 caracteres del base64: ${data.pdf.substring(0, 100)}`,
+      );
+      console.log(
+        `🔍 Últimos 20 caracteres del base64: ${data.pdf.substring(data.pdf.length - 20)}`,
+      );
 
       // Validar que sea base64 válido antes de devolverlo
       const base64Regex = /^[A-Za-z0-9+/]*={0,2}$/;
@@ -293,7 +316,6 @@ export function useVentas() {
       }
 
       return data.pdf; // Base64 string
-
     } catch (error: any) {
       console.error(`❌ Error generando PDF ${tipo}:`, error);
       throw new Error(`Error al generar PDF: ${error.message}`);
@@ -304,7 +326,7 @@ export function useVentas() {
   const generarHtmlBoleta = (venta: Venta, afipData?: any): string => {
     const isElectronica = !!afipData?.cae;
     const items = venta.items || [];
-    
+
     const formatCurrency = (amount: number) =>
       new Intl.NumberFormat("es-AR", {
         style: "currency",
@@ -345,7 +367,7 @@ export function useVentas() {
         <td class="text-right">21.00</td>
         <td class="text-right">${formatCurrency(item.price * item.quantity)}</td>
       </tr>
-    `
+    `,
       )
       .join("");
 
@@ -353,7 +375,7 @@ export function useVentas() {
       .map(
         () => `
       <tr><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td></tr>
-    `
+    `,
       )
       .join("");
 
@@ -648,14 +670,18 @@ export function useVentas() {
       </tr>
     </thead>
     <tbody>
-      ${venta.items.map(item => `
+      ${venta.items
+        .map(
+          (item) => `
         <tr>
           <td style="text-align: center;">${item.quantity}</td>
           <td>${item.name}</td>
           <td style="text-align: right;">${formatCurrency(item.price)}</td>
           <td style="text-align: right;">${formatCurrency(item.price * item.quantity)}</td>
         </tr>
-      `).join("")}
+      `,
+        )
+        .join("")}
     </tbody>
     <tfoot>
       <tr>
@@ -687,6 +713,7 @@ export function useVentas() {
       if (!user) throw new Error("Usuario no autenticado");
       const token = await user.getIdToken();
 
+      // hooks/useVentas.ts - línea 257 aproximadamente
       if (tipoDocumento === "boleta") {
         // 1. Emitir en AFIP
         const afipResponse = await fetch("/api/ventas/emitir", {
@@ -697,11 +724,21 @@ export function useVentas() {
           },
           body: JSON.stringify({
             saleId: ventaParaEmitir.id,
-            client: ventaParaEmitir.clientData || {
-              name: ventaParaEmitir.clientName,
-              phone: ventaParaEmitir.clientPhone,
-              cuit: ventaParaEmitir.clientCuit,
-              taxCategory: ventaParaEmitir.clientTaxCategory,
+            client: {
+              name:
+                ventaParaEmitir.clientData?.name || ventaParaEmitir.clientName,
+              phone:
+                ventaParaEmitir.clientData?.phone ||
+                ventaParaEmitir.clientPhone,
+              cuit:
+                ventaParaEmitir.clientData?.cuit || ventaParaEmitir.clientCuit,
+              address:
+                ventaParaEmitir.clientData?.address ||
+                ventaParaEmitir.clientAddress,
+              taxCategory:
+                ventaParaEmitir.clientData?.taxCategory ||
+                ventaParaEmitir.clientTaxCategory ||
+                "consumidor_final",
             },
             emitirAfip: true,
           }),
@@ -714,7 +751,9 @@ export function useVentas() {
           } catch {
             errorText = "Error desconocido";
           }
-          throw new Error(`Error en AFIP (${afipResponse.status}): ${errorText.substring(0, 200)}`);
+          throw new Error(
+            `Error en AFIP (${afipResponse.status}): ${errorText.substring(0, 200)}`,
+          );
         }
 
         const afipResult = await afipResponse.json();
@@ -724,7 +763,7 @@ export function useVentas() {
         const pdfBase64 = await generarPdfCompleto(
           { ...ventaParaEmitir, invoiceNumber },
           "boleta",
-          afipData
+          afipData,
         );
 
         // 3. Guardar en Firestore
@@ -750,14 +789,13 @@ export function useVentas() {
         // 5. Descargar
         downloadBase64Pdf(pdfBase64, `boleta-${invoiceNumber}.pdf`);
         toast.success("Boleta emitida correctamente", { id: toastId });
-
       } else if (tipoDocumento === "remito") {
         // 1. Generar número de remito
         const remitosQuery = query(
           collection(db, "ventas"),
           where("remitoNumber", "!=", null),
           orderBy("remitoNumber", "desc"),
-          limit(1)
+          limit(1),
         );
         const remitosSnapshot = await getDocs(remitosQuery);
         let ultimoNumero = 0;
@@ -771,7 +809,7 @@ export function useVentas() {
         // 2. Generar PDF
         const pdfBase64 = await generarPdfCompleto(
           { ...ventaParaEmitir, remitoNumber },
-          "remito"
+          "remito",
         );
 
         // 3. Guardar en Firestore
@@ -808,7 +846,8 @@ export function useVentas() {
 
   // Descargar PDF existente
   const descargarPdf = (venta: Venta, tipo: "boleta" | "remito" = "boleta") => {
-    const base64 = tipo === "boleta" ? venta.invoicePdfBase64 : venta.remitoPdfBase64;
+    const base64 =
+      tipo === "boleta" ? venta.invoicePdfBase64 : venta.remitoPdfBase64;
     if (base64) {
       const filename =
         tipo === "boleta"
@@ -823,31 +862,37 @@ export function useVentas() {
   const construirUrlWhatsapp = (venta: Venta) => {
     if (!venta.clientPhone) return null;
     const telefono = venta.clientPhone.replace(/\D/g, "");
-    const formattedPhone = telefono.startsWith("54") ? telefono : `54${telefono}`;
-    
+    const formattedPhone = telefono.startsWith("54")
+      ? telefono
+      : `54${telefono}`;
+
     // Crear mensaje con instrucciones para descargar el PDF
     const tieneFactura = venta.invoiceEmitted && venta.invoicePdfBase64;
     const tieneRemito = venta.remitoNumber && venta.remitoPdfBase64;
-    
+
     let mensaje = `Hola ${venta.clientName || ""},\n\n`;
-    
+
     if (tieneFactura) {
       mensaje += `Tu factura N° ${venta.invoiceNumber} está lista.\n`;
-      mensaje += `Total: $${venta.total.toLocaleString('es-AR')}\n\n`;
+      mensaje += `Total: $${venta.total.toLocaleString("es-AR")}\n\n`;
     }
-    
+
     if (tieneRemito) {
       mensaje += `Tu remito N° ${venta.remitoNumber} está listo.\n\n`;
     }
-    
+
     mensaje += `Para descargar el comprobante, haz clic en el siguiente enlace:\n`;
     mensaje += `${window.location.origin}/ventas?saleId=${venta.id}`;
-    
+
     return `https://wa.me/${formattedPhone}?text=${encodeURIComponent(mensaje)}`;
   };
 
-  const enviarPorWhatsapp = async (venta: Venta, tipo: "boleta" | "remito" = "boleta") => {
-    const base64 = tipo === "boleta" ? venta.invoicePdfBase64 : venta.remitoPdfBase64;
+  const enviarPorWhatsapp = async (
+    venta: Venta,
+    tipo: "boleta" | "remito" = "boleta",
+  ) => {
+    const base64 =
+      tipo === "boleta" ? venta.invoicePdfBase64 : venta.remitoPdfBase64;
     const phone = venta.clientPhone;
 
     if (!base64) {
@@ -861,12 +906,13 @@ export function useVentas() {
     }
 
     try {
-      const filename = tipo === "boleta" 
-        ? `Factura-${venta.invoiceNumber || venta.id}.pdf`
-        : `Remito-${venta.remitoNumber || venta.id}.pdf`;
+      const filename =
+        tipo === "boleta"
+          ? `Factura-${venta.invoiceNumber || venta.id}.pdf`
+          : `Remito-${venta.remitoNumber || venta.id}.pdf`;
 
       // Limpiar base64 y crear blob
-      const cleanBase64 = base64.replace(/\s/g, '');
+      const cleanBase64 = base64.replace(/\s/g, "");
       const byteCharacters = atob(cleanBase64);
       const byteNumbers = new Array(byteCharacters.length);
       for (let i = 0; i < byteCharacters.length; i++) {
@@ -876,32 +922,37 @@ export function useVentas() {
       const blob = new Blob([byteArray], { type: "application/pdf" });
 
       const cleanPhone = phone.replace(/\D/g, "");
-      const formattedPhone = cleanPhone.startsWith("54") ? cleanPhone : `54${cleanPhone}`;
+      const formattedPhone = cleanPhone.startsWith("54")
+        ? cleanPhone
+        : `54${cleanPhone}`;
 
       // MÓVIL: Intentar compartir nativo
       if (navigator.share) {
         try {
           const file = new File([blob], filename, { type: "application/pdf" });
-          
+
           if (navigator.canShare && navigator.canShare({ files: [file] })) {
             await navigator.share({
               files: [file],
               title: filename,
-              text: tipo === "boleta"
-                ? `Factura N° ${venta.invoiceNumber} - Total: $${venta.total.toLocaleString('es-AR')}`
-                : `Remito N° ${venta.remitoNumber}`,
+              text:
+                tipo === "boleta"
+                  ? `Factura N° ${venta.invoiceNumber} - Total: $${venta.total.toLocaleString("es-AR")}`
+                  : `Remito N° ${venta.remitoNumber}`,
             });
             toast.success("Archivo compartido");
             return;
           }
         } catch (shareError) {
-          console.log("Compartir nativo no disponible, usando método alternativo");
+          console.log(
+            "Compartir nativo no disponible, usando método alternativo",
+          );
         }
       }
 
       // DESKTOP/FALLBACK: Descargar + abrir WhatsApp con instrucciones
       console.log("💻 Descargando PDF y abriendo WhatsApp");
-      
+
       // 1. Descargar el PDF
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
@@ -913,19 +964,19 @@ export function useVentas() {
       URL.revokeObjectURL(url);
 
       // 2. Abrir WhatsApp con mensaje
-      const mensaje = tipo === "boleta"
-        ? `Hola ${venta.clientName || ""}! 👋\n\nTe descargué la *Factura N° ${venta.invoiceNumber}*\nTotal: $${venta.total.toLocaleString('es-AR')}\n\n📎 Adjuntá el archivo PDF que se descargó automáticamente.`
-        : `Hola ${venta.clientName || ""}! 👋\n\nTe descargué el *Remito N° ${venta.remitoNumber}*\n\n📎 Adjuntá el archivo PDF que se descargó automáticamente.`;
-      
+      const mensaje =
+        tipo === "boleta"
+          ? `Hola ${venta.clientName || ""}! 👋\n\nTe descargué la *Factura N° ${venta.invoiceNumber}*\nTotal: $${venta.total.toLocaleString("es-AR")}\n\n📎 Adjuntá el archivo PDF que se descargó automáticamente.`
+          : `Hola ${venta.clientName || ""}! 👋\n\nTe descargué el *Remito N° ${venta.remitoNumber}*\n\n📎 Adjuntá el archivo PDF que se descargó automáticamente.`;
+
       window.open(
         `https://wa.me/${formattedPhone}?text=${encodeURIComponent(mensaje)}`,
-        "_blank"
+        "_blank",
       );
 
       toast.success("PDF descargado. Adjuntalo manualmente en WhatsApp.", {
         duration: 5000,
       });
-
     } catch (error: any) {
       console.error("❌ Error enviando por WhatsApp:", error);
       toast.error("Error: " + error.message);
