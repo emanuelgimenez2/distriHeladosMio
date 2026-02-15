@@ -1,3 +1,4 @@
+// app/api/generate-pdf/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import puppeteer from "puppeteer";
 
@@ -5,23 +6,22 @@ export const runtime = "nodejs";
 
 export async function POST(request: NextRequest) {
   let browser;
-  
+
   try {
     console.log("📄 [PDF API] Iniciando generación...");
-    
+
     const body = await request.json();
     const { html, filename } = body;
 
     if (!html) {
       return NextResponse.json(
         { error: "HTML no proporcionado" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
     console.log("📄 [PDF API] Lanzando Puppeteer...");
-    
-    // Lanzar navegador headless
+
     browser = await puppeteer.launch({
       headless: true,
       args: [
@@ -31,27 +31,25 @@ export async function POST(request: NextRequest) {
         "--disable-accelerated-2d-canvas",
         "--disable-gpu",
       ],
+      executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
     });
 
     console.log("📄 [PDF API] Creando página...");
     const page = await browser.newPage();
 
-    // Configurar viewport para A4
     await page.setViewport({
-      width: 794, // 210mm en px (72 DPI)
-      height: 1123, // 297mm en px (72 DPI)
+      width: 794,
+      height: 1123,
     });
 
     console.log("📄 [PDF API] Cargando HTML...");
-    
-    // Cargar el HTML
+
     await page.setContent(html, {
       waitUntil: ["load", "networkidle0"],
     });
 
     console.log("📄 [PDF API] Generando PDF...");
 
-    // Generar PDF
     const pdfBuffer = await page.pdf({
       format: "A4",
       printBackground: true,
@@ -65,14 +63,12 @@ export async function POST(request: NextRequest) {
 
     console.log(`✅ [PDF API] PDF generado, tamaño: ${pdfBuffer.length} bytes`);
 
-    // Convertir Buffer a base64 correctamente
     const pdfBase64 = Buffer.from(pdfBuffer).toString("base64");
-    
-    console.log(`✅ [PDF API] Base64 generado, longitud: ${pdfBase64.length} caracteres`);
-    console.log(`🔍 [PDF API] Primeros 100 caracteres: ${pdfBase64.substring(0, 100)}`);
-    console.log(`🔍 [PDF API] Últimos 20 caracteres: ${pdfBase64.substring(pdfBase64.length - 20)}`);
 
-    // Cerrar navegador
+    console.log(
+      `✅ [PDF API] Base64 generado, longitud: ${pdfBase64.length} caracteres`,
+    );
+
     await browser.close();
 
     return NextResponse.json({
@@ -81,11 +77,9 @@ export async function POST(request: NextRequest) {
       filename: filename || "document.pdf",
       size: pdfBuffer.length,
     });
-
   } catch (error: any) {
     console.error("❌ [PDF API] Error:", error);
-    
-    // Cerrar navegador si quedó abierto
+
     if (browser) {
       try {
         await browser.close();
@@ -99,7 +93,7 @@ export async function POST(request: NextRequest) {
         error: error.message || "Error generando PDF",
         stack: process.env.NODE_ENV === "development" ? error.stack : undefined,
       },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

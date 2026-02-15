@@ -1,3 +1,4 @@
+// app/api/ventas/emitir/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { adminAuth, adminFirestore } from "@/lib/firebase-admin";
 import { emitirComprobante } from "@/lib/afip";
@@ -6,7 +7,6 @@ export async function POST(request: NextRequest) {
   try {
     console.log("🚀 [AFIP API] Iniciando emisión de comprobante...");
 
-    // Verificar auth
     const authHeader = request.headers.get("Authorization");
     if (!authHeader?.startsWith("Bearer ")) {
       return NextResponse.json({ message: "No autorizado" }, { status: 401 });
@@ -26,19 +26,22 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ message: "Falta saleId" }, { status: 400 });
     }
 
-    console.log(`📄 [AFIP API] Procesando venta ${saleId}, emitirAfip: ${emitirAfip}`);
+    console.log(
+      `📄 [AFIP API] Procesando venta ${saleId}, emitirAfip: ${emitirAfip}`,
+    );
 
-    // Obtener venta de Firestore
     const ventaRef = adminFirestore.collection("ventas").doc(saleId);
     const ventaSnap = await ventaRef.get();
 
     if (!ventaSnap.exists) {
-      return NextResponse.json({ message: "Venta no encontrada" }, { status: 404 });
+      return NextResponse.json(
+        { message: "Venta no encontrada" },
+        { status: 404 },
+      );
     }
 
     const sale = ventaSnap.data() || {};
 
-    // Obtener datos del cliente
     let clientData: any = client || {};
     if (sale.clientId && !client?.name) {
       const clientSnap = await adminFirestore
@@ -51,17 +54,21 @@ export async function POST(request: NextRequest) {
           name: c.name,
           phone: c.phone,
           email: c.email,
-          taxCategory: c.taxCategory,
+          taxCategory: c.taxCategory || "consumidor_final",
           cuit: c.cuit,
           dni: c.dni,
         };
       }
     }
 
+    // ASEGURAR que taxCategory SIEMPRE tenga un valor
+    if (!clientData.taxCategory) {
+      clientData.taxCategory = "consumidor_final";
+    }
+
     let afipResponse = null;
     let invoiceNumber = null;
 
-    // Solo emitir en AFIP si se solicita explícitamente
     if (emitirAfip) {
       console.log("💰 [AFIP API] Preparando datos para AFIP...");
 
@@ -72,7 +79,7 @@ export async function POST(request: NextRequest) {
       const taxCategoryMapping: Record<string, number> = {
         consumidor_final: 5,
         responsable_inscripto: 1,
-        monotributista: 6,
+        monotributo: 6,
         exento: 4,
         no_categorizado: 7,
         cliente_exterior: 9,
@@ -85,19 +92,25 @@ export async function POST(request: NextRequest) {
         ? 0
         : parseInt(clientData.cuit.replace(/\D/g, ""));
 
+      const condicionIVA = taxCategoryMapping[clientData.taxCategory] || 5;
+
+      console.log("🔍 [AFIP API] Condición IVA receptor:", {
+        taxCategory: clientData.taxCategory,
+        condicionIVA: condicionIVA,
+      });
+
       const comprobanteData = {
         puntoVenta: 1,
-        tipoComprobante: 6, // Factura B
+        tipoComprobante: 6,
         fechaComprobante: new Date().toISOString().split("T")[0],
-        concepto: 1, // Productos
+        concepto: 1,
         tipoDocumento: tipoDoc,
         numeroDocumento: nroDoc,
         importeTotal,
         importeNeto,
         importeIVA,
         importeExento: 0,
-        CondicionIVAReceptor:
-          taxCategoryMapping[clientData.taxCategory] || 5,
+        CondicionIVAReceptor: condicionIVA,
       };
 
       console.log("📡 [AFIP API] Enviando a AFIP:", {
@@ -106,11 +119,12 @@ export async function POST(request: NextRequest) {
         importeTotal: comprobanteData.importeTotal,
         tipoDoc,
         nroDoc,
+        CondicionIVAReceptor: comprobanteData.CondicionIVAReceptor,
       });
 
       try {
         afipResponse = await emitirComprobante(comprobanteData);
-        
+
         invoiceNumber = `${String(comprobanteData.puntoVenta).padStart(4, "0")}-${String(afipResponse.cbteDesde).padStart(8, "0")}`;
 
         console.log("✅ [AFIP API] Comprobante emitido:", {
@@ -119,22 +133,19 @@ export async function POST(request: NextRequest) {
           caeVencimiento: afipResponse.caeVencimiento,
         });
 
-        // VERIFICAR que el CAE no esté vacío
         if (!afipResponse.cae || !afipResponse.caeVencimiento) {
           console.error("❌ [AFIP API] CAE vacío recibido de AFIP");
           throw new Error("AFIP no devolvió CAE válido");
         }
-
       } catch (afipError: any) {
         console.error("❌ [AFIP API] Error en AFIP:", afipError);
         return NextResponse.json(
           { message: "Error en AFIP", error: afipError.message },
-          { status: 500 }
+          { status: 500 },
         );
       }
     }
 
-    // Preparar datos de actualización
     const updateData: any = {
       clientData: {
         name: clientData.name,
@@ -158,7 +169,7 @@ export async function POST(request: NextRequest) {
         puntoVenta: 1,
         numeroComprobante: afipResponse.cbteDesde || 0,
       };
-      
+
       console.log("📋 [AFIP API] Datos AFIP a guardar:", updateData.afipData);
     }
 
@@ -185,7 +196,7 @@ export async function POST(request: NextRequest) {
     console.error("❌ [AFIP API] Error general:", error);
     return NextResponse.json(
       { message: "Error interno", error: error.message },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

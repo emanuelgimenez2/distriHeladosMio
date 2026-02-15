@@ -362,7 +362,7 @@ export async function GET(
 
     await browser.close();
 
-    await file.save(pdfBuffer, {
+    await file.save(Buffer.from(pdfBuffer), {
       metadata: {
         contentType: "application/pdf",
         metadata: {
@@ -379,7 +379,7 @@ export async function GET(
       invoicePdfGeneratedAt: new Date().toISOString(),
     });
 
-    return new NextResponse(pdfBuffer, {
+    return new NextResponse(Buffer.from(pdfBuffer), {
       headers: {
         "Content-Type": "application/pdf",
         "Content-Disposition": `inline; filename="factura-${sale.invoiceNumber || saleId}.pdf"`,
