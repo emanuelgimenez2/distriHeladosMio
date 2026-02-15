@@ -1,6 +1,4 @@
-// app/api/generate-pdf/route.ts
 import { NextRequest, NextResponse } from "next/server";
-import puppeteer from "puppeteer-core";
 import chromium from "@sparticuz/chromium";
 
 export const runtime = "nodejs";
@@ -25,15 +23,19 @@ export async function POST(request: NextRequest) {
 
     const isProduction = process.env.NODE_ENV === "production";
 
-    browser = await puppeteer.launch({
-      args: isProduction
-        ? chromium.args
-        : ["--no-sandbox", "--disable-setuid-sandbox"],
-      executablePath: isProduction
-        ? await chromium.executablePath()
-        : process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
-      headless: true,
-    });
+    if (isProduction) {
+      const puppeteerCore = (await import("puppeteer-core")).default;
+      browser = await puppeteerCore.launch({
+        args: chromium.args,
+        executablePath: await chromium.executablePath(),
+        headless: true,
+      });
+    } else {
+      const puppeteerFull = (await import("puppeteer")).default;
+      browser = await puppeteerFull.launch({
+        headless: true,
+      });
+    }
 
     console.log("📄 [PDF API] Creando página...");
     const page = await browser.newPage();
