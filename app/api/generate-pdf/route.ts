@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import chromium from "@sparticuz/chromium";
 
 export const runtime = "nodejs";
+export const maxDuration = 60; // ✅ Aumentar timeout para Vercel
 
 export async function POST(request: NextRequest) {
   let browser;
@@ -24,16 +25,35 @@ export async function POST(request: NextRequest) {
     const isProduction = process.env.NODE_ENV === "production";
 
     if (isProduction) {
+      console.log("📄 [PDF API] Modo PRODUCCIÓN - Usando Chromium headless");
+      
+      // ✅ Configuración optimizada para Vercel
+      chromium.setHeadlessMode = true;
+      chromium.setGraphicsMode = false;
+
       const puppeteerCore = (await import("puppeteer-core")).default;
+      
       browser = await puppeteerCore.launch({
-        args: chromium.args,
+        args: [
+          ...chromium.args,
+          "--disable-gpu",
+          "--disable-dev-shm-usage",
+          "--disable-setuid-sandbox",
+          "--no-sandbox",
+          "--single-process",
+          "--no-zygote",
+        ],
+        defaultViewport: chromium.defaultViewport,
         executablePath: await chromium.executablePath(),
-        headless: true,
+        headless: chromium.headless,
+        ignoreHTTPSErrors: true,
       });
     } else {
+      console.log("📄 [PDF API] Modo DESARROLLO - Usando Puppeteer local");
       const puppeteerFull = (await import("puppeteer")).default;
       browser = await puppeteerFull.launch({
         headless: true,
+        args: ["--no-sandbox", "--disable-setuid-sandbox"],
       });
     }
 
@@ -49,6 +69,7 @@ export async function POST(request: NextRequest) {
 
     await page.setContent(html, {
       waitUntil: ["load", "networkidle0"],
+      timeout: 30000, // ✅ Timeout de 30 segundos
     });
 
     console.log("📄 [PDF API] Generando PDF...");
@@ -62,6 +83,7 @@ export async function POST(request: NextRequest) {
         bottom: 0,
         left: 0,
       },
+      preferCSSPageSize: true,
     });
 
     console.log(`✅ [PDF API] PDF generado, tamaño: ${pdfBuffer.length} bytes`);
@@ -82,6 +104,7 @@ export async function POST(request: NextRequest) {
     });
   } catch (error: any) {
     console.error("❌ [PDF API] Error:", error);
+    console.error("❌ [PDF API] Stack:", error.stack);
 
     if (browser) {
       try {
@@ -94,6 +117,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       {
         error: error.message || "Error generando PDF",
+        details: error.toString(),
         stack: process.env.NODE_ENV === "development" ? error.stack : undefined,
       },
       { status: 500 },
