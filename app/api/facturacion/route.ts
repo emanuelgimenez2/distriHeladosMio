@@ -111,31 +111,30 @@ export async function POST(request: NextRequest) {
       },
       updatedAt: new Date().toISOString(),
     };
-
-    if (afipResponse) {
-      updateData.invoiceNumber = invoiceNumber;
-      updateData.invoiceEmitted = true;
-      updateData.invoiceStatus = "emitted";
-      updateData.afipData = {
-        cae: afipResponse.CAE,
-        caeVencimiento: afipResponse.CAEFchVto,
-        tipoComprobante: 6,
-        puntoVenta: 1,
-        numeroComprobante: afipResponse.cbteDesde,
-      };
-    }
+if (afipResponse) {
+  updateData.invoiceNumber = invoiceNumber;
+  updateData.invoiceEmitted = true;
+  updateData.invoiceStatus = "emitted";
+  updateData.afipData = {
+    cae: afipResponse.cae,                    // ✅ minúscula
+    caeVencimiento: afipResponse.caeVencimiento, // ✅ ya estaba correcto
+    tipoComprobante: 6,
+    puntoVenta: 1,
+    numeroComprobante: afipResponse.cbteDesde,  // ✅ minúscula
+  };
+}
 
     await ventaRef.update(updateData);
 
-    return NextResponse.json({
-      success: true,
-      invoiceNumber,
-      afipData: afipResponse ? {
-        cae: afipResponse.CAE,
-        caeVencimiento: afipResponse.CAEFchVto,
-      } : null,
-      message: emitirAfip ? "Factura emitida en AFIP" : "Datos actualizados",
-    });
+ return NextResponse.json({
+  success: true,
+  invoiceNumber,
+  afipData: afipResponse ? {
+    cae: afipResponse.cae,                    // ✅ minúscula
+    caeVencimiento: afipResponse.caeVencimiento, // ✅ ya estaba correcto
+  } : null,
+  message: emitirAfip ? "Factura emitida en AFIP" : "Datos actualizados",
+});
 
   } catch (error: any) {
     console.error("Error:", error);
