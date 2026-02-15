@@ -109,12 +109,14 @@ export async function emitirComprobante(
       condicionIVAReceptor: data.CondicionIVAReceptor,
     });
 
-    // En modo desarrollo O si no hay access token, simular respuesta
-    const isProduction = process.env.NODE_ENV === "production";
+    // Determinar si usar AFIP real o simulado según variable de entorno
+    const useRealAfip = process.env.AFIP_PRODUCTION === "true";
     const hasAccessToken = !!process.env.AFIP_ACCESS_TOKEN;
 
-    if (!isProduction || !hasAccessToken) {
-      console.log("⚠️ [AFIP] Modo DESARROLLO - Generando CAE simulado");
+    if (!useRealAfip || !hasAccessToken) {
+      console.log("⚠️ [AFIP] Modo DESARROLLO/SIMULACIÓN - Generando CAE simulado");
+      console.log(`   AFIP_PRODUCTION=${process.env.AFIP_PRODUCTION}`);
+      console.log(`   NODE_ENV=${process.env.NODE_ENV}`);
       
       const caeSimulado = "74123456789012"; // 14 dígitos
       const fechaVencimiento = new Date();
@@ -166,11 +168,11 @@ export async function emitirComprobante(
       MonCotiz: 1,
     };
 
-    // ✅ CAMBIO CRÍTICO: Solo agregar condición IVA para Factura A (tipo 1)
-    // Las Facturas B no requieren este campo
-    if (data.tipoComprobante === 1 && data.CondicionIVAReceptor) {
-      comprobanteData.CondIVA = data.CondicionIVAReceptor;
-      console.log("📝 [AFIP] Agregando condición IVA del receptor:", data.CondicionIVAReceptor);
+    // ✅ Campo OBLIGATORIO desde abril 2025 según Resolución General 5616
+    // Debe llamarse "CondicionIVAReceptorId" (con "Id" al final)
+    if (data.CondicionIVAReceptor) {
+      comprobanteData.CondicionIVAReceptorId = data.CondicionIVAReceptor;
+      console.log("📝 [AFIP] Condición IVA del receptor:", data.CondicionIVAReceptor);
     }
 
     if (data.importeIVA > 0) {

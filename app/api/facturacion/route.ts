@@ -92,7 +92,7 @@ export async function POST(request: NextRequest) {
         importeNeto,
         importeIVA,
         importeExento: 0,
-        CondicionIVAReceptor: taxCategoryMapping[clientData.taxCategory] || 5,
+        CondicionIVAReceptor: taxCategoryMapping[clientData.taxCategory] || 5, // Obligatorio desde abril 2025
       };
 
       console.log("📋 Datos del comprobante a emitir:", {
@@ -100,6 +100,8 @@ export async function POST(request: NextRequest) {
         cliente: clientData.name,
         taxCategory: clientData.taxCategory,
         condicionIVA: comprobanteData.CondicionIVAReceptor,
+        tipoDoc,
+        nroDoc,
         total: importeTotal,
       });
 
