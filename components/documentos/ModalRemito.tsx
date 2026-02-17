@@ -91,36 +91,42 @@ export function ModalRemito({
     toast.success("Descargando remito...");
   };
 
-  const handleWhatsapp = () => {
-    if (!saleData?.clientPhone) {
-      toast.error("El cliente no tiene número de teléfono");
+  const handleWhatsapp = async () => {
+    if (!pdfBase64 || !saleData?.clientPhone) {
+      toast.error("Falta teléfono o PDF");
       return;
     }
-    if (!pdfBase64) return;
 
-    const byteChars = atob(pdfBase64);
-    const byteNums = new Uint8Array(byteChars.length);
-    for (let i = 0; i < byteChars.length; i++)
-      byteNums[i] = byteChars.charCodeAt(i);
-    const blob = new Blob([byteNums], { type: "application/pdf" });
-    const file = new File([blob], `Remito-${remitoNumber}.pdf`, {
-      type: "application/pdf",
-    });
+    try {
+      toast.loading("Subiendo PDF a Drive...");
 
-    const cleanPhone = saleData.clientPhone.replace(/\D/g, "");
-    const formattedPhone = cleanPhone.startsWith("54")
-      ? cleanPhone
-      : `54${cleanPhone}`;
+      const res = await fetch("/api/drive", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          base64: pdfBase64,
+          filename: `Remito-${remitoNumber}.pdf`,
+        }),
+      });
 
-    if (navigator.share && navigator.canShare?.({ files: [file] })) {
-      navigator.share({ files: [file], title: `Remito-${remitoNumber}.pdf` });
-    } else {
-      handleDownload();
-      const msg = `Hola ${saleData?.clientName || ""}! Te envío el Remito N° ${remitoNumber}.`;
+      if (!res.ok) throw new Error("Error al subir a Drive");
+      const { downloadUrl } = await res.json();
+
+      const cleanPhone = saleData.clientPhone.replace(/\D/g, "");
+      const formattedPhone = cleanPhone.startsWith("54")
+        ? cleanPhone
+        : `54${cleanPhone}`;
+      const msg = `Hola ${saleData?.clientName}! Te envío el Remito N° ${remitoNumber}.\n\n📄 Descargar PDF: ${downloadUrl}`;
+
+      toast.dismiss();
+      toast.success("✅ Link generado");
       window.open(
         `https://wa.me/${formattedPhone}?text=${encodeURIComponent(msg)}`,
         "_blank",
       );
+    } catch (e: any) {
+      toast.dismiss();
+      toast.error("Error: " + e.message);
     }
   };
 

@@ -93,7 +93,7 @@ export function ModalDetalleVenta({
     }
   };
 
-  const handleWhatsappWithPdf = (type: "invoice" | "remito") => {
+  const handleWhatsappWithPdf = async (type: "invoice" | "remito") => {
     const base64Field =
       type === "invoice" ? "invoicePdfBase64" : "remitoPdfBase64";
     const filenameField =
@@ -110,18 +110,36 @@ export function ModalDetalleVenta({
       return;
     }
 
-    downloadBase64Pdf(
-      venta[base64Field],
-      venta[filenameField] || `${type}-${venta.id}.pdf`,
-    );
+    try {
+      toast.loading("Subiendo PDF a Drive...");
 
-    const message = `Hola ${venta.clientName}, te envío el ${type === "invoice" ? "comprobante" : "remito"} de tu compra.`;
-    const phone = venta.clientPhone.replace(/\D/g, "");
-    const formattedPhone = phone.startsWith("54") ? phone : `54${phone}`;
-    window.open(
-      `https://wa.me/${formattedPhone}?text=${encodeURIComponent(message)}`,
-      "_blank",
-    );
+      const res = await fetch("/api/drive", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          base64: venta[base64Field],
+          filename: venta[filenameField] || `${type}-${venta.id}.pdf`,
+        }),
+      });
+
+      if (!res.ok) throw new Error("Error al subir a Drive");
+      const { downloadUrl } = await res.json();
+
+      const phone = venta.clientPhone.replace(/\D/g, "");
+      const formattedPhone = phone.startsWith("54") ? phone : `54${phone}`;
+      const docName = type === "invoice" ? "comprobante" : "remito";
+      const msg = `Hola ${venta.clientName}! Te envío tu ${docName}.\n\n📄 Descargar: ${downloadUrl}`;
+
+      toast.dismiss();
+      toast.success("✅ Link generado");
+      window.open(
+        `https://wa.me/${formattedPhone}?text=${encodeURIComponent(msg)}`,
+        "_blank",
+      );
+    } catch (e: any) {
+      toast.dismiss();
+      toast.error("Error: " + e.message);
+    }
   };
 
   return (

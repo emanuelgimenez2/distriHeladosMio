@@ -110,37 +110,45 @@ export function ModalBoleta({
     toast.success("⬇️ Descargando PDF...");
   };
 
-  const handleWhatsapp = () => {
+  const handleWhatsapp = async () => {
     const phone = clientData?.phone || saleData?.clientPhone;
-    if (!phone) {
-      toast.error("El cliente no tiene número de teléfono");
+    if (!pdfBase64 || !phone) {
+      toast.error("Falta teléfono o PDF");
       return;
     }
-    if (!pdfBase64) return;
 
-    const byteChars = atob(pdfBase64);
-    const byteNums = new Uint8Array(byteChars.length);
-    for (let i = 0; i < byteChars.length; i++)
-      byteNums[i] = byteChars.charCodeAt(i);
-    const blob = new Blob([byteNums], { type: "application/pdf" });
-    const file = new File([blob], `Boleta-${invoiceNumber}.pdf`, {
-      type: "application/pdf",
-    });
+    try {
+      toast.loading("Subiendo PDF a Drive...");
 
-    const cleanPhone = phone.replace(/\D/g, "");
-    const formattedPhone = cleanPhone.startsWith("54")
-      ? cleanPhone
-      : `54${cleanPhone}`;
+      // 1. Subir PDF a Drive y obtener link
+      const res = await fetch("/api/drive", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          base64: pdfBase64,
+          filename: `Boleta-${invoiceNumber}.pdf`,
+        }),
+      });
 
-    if (navigator.share && navigator.canShare?.({ files: [file] })) {
-      navigator.share({ files: [file], title: `Boleta-${invoiceNumber}.pdf` });
-    } else {
-      handleDownload();
-      const msg = `Hola ${clientData?.name || ""}! Te envío la Boleta N° ${invoiceNumber}. Total: $${(saleData?.total || 0).toLocaleString("es-AR")}`;
+      if (!res.ok) throw new Error("Error al subir a Drive");
+      const { downloadUrl } = await res.json();
+
+      // 2. Abrir WhatsApp con el link
+      const cleanPhone = phone.replace(/\D/g, "");
+      const formattedPhone = cleanPhone.startsWith("54")
+        ? cleanPhone
+        : `54${cleanPhone}`;
+      const msg = `Hola ${clientData?.name || saleData?.clientName}! Te envío la Boleta N° ${invoiceNumber}.\n\n📄 Descargar PDF: ${downloadUrl}`;
+
+      toast.dismiss();
+      toast.success("✅ Link generado");
       window.open(
         `https://wa.me/${formattedPhone}?text=${encodeURIComponent(msg)}`,
         "_blank",
       );
+    } catch (e: any) {
+      toast.dismiss();
+      toast.error("Error: " + e.message);
     }
   };
 
