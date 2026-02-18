@@ -226,49 +226,36 @@ export function ModalDetalleVenta({
                 </p>
 
                 {venta.invoiceEmitted && (
-                  <div className="flex flex-col gap-2 mt-3">
-                    {venta.invoicePdfBase64 ? (
-                      <>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleDownloadFromDb("invoice")}
-                          disabled={downloading === "invoice"}
-                          className="w-full gap-1.5 text-xs"
-                        >
-                          {downloading === "invoice" ? (
-                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                          ) : (
-                            <Download className="h-3.5 w-3.5" />
-                          )}
-                          Descargar PDF
-                        </Button>
-                        {venta.clientPhone && (
-                          <Button
-                            size="sm"
-                            onClick={() => handleWhatsappWithPdf("invoice")}
-                            className="w-full gap-1.5 text-xs bg-green-500 hover:bg-green-600 text-white"
-                          >
-                            <Send className="h-3.5 w-3.5" />
-                            Enviar WhatsApp
-                          </Button>
-                        )}
-                      </>
-                    ) : (
+                  <div className="flex gap-2 mt-3">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="flex-1 gap-1 text-xs"
+                      disabled={downloading === "invoice"}
+                      onClick={() => handleDownloadFromDb("invoice")}
+                    >
+                      {downloading === "invoice" ? (
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                      ) : (
+                        <Download className="h-3 w-3" />
+                      )}
+                      PDF
+                    </Button>
+                    {venta.clientPhone && (
                       <Button
-                        variant="outline"
                         size="sm"
-                        onClick={() => onEmitirBoleta(venta)} // 🔹 Abre el modal de emisión con boleta
-                        className="w-full gap-1.5 text-xs"
+                        className="flex-1 gap-1 text-xs bg-green-500 hover:bg-green-600 text-white"
+                        onClick={() => handleWhatsappWithPdf("invoice")}
                       >
-                        <Eye className="h-3.5 w-3.5" />
-                        Generar PDF
+                        <Send className="h-3 w-3" />
+                        WhatsApp
                       </Button>
                     )}
                   </div>
                 )}
               </div>
 
+              {/* Remito */}
               {/* Remito */}
               <div
                 className={`p-4 rounded-xl border ${venta.remitoNumber ? "bg-blue-50/50 border-blue-200" : "bg-muted/50 border-border"}`}
@@ -287,16 +274,43 @@ export function ModalDetalleVenta({
                   {venta.remitoNumber || "Sin remito"}
                 </p>
 
-                {!venta.remitoNumber && (
+                {!venta.remitoNumber ? (
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => onGenerarRemito(venta)} // 🔹 Abre el modal de emisión con remito
+                    onClick={() => onGenerarRemito(venta)}
                     className="w-full gap-1.5 text-xs mt-3"
                   >
                     <Truck className="h-3.5 w-3.5" />
                     Generar Remito
                   </Button>
+                ) : (
+                  <div className="flex gap-2 mt-3">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="flex-1 gap-1 text-xs"
+                      disabled={downloading === "remito"}
+                      onClick={() => handleDownloadFromDb("remito")}
+                    >
+                      {downloading === "remito" ? (
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                      ) : (
+                        <Download className="h-3 w-3" />
+                      )}
+                      PDF
+                    </Button>
+                    {venta.clientPhone && (
+                      <Button
+                        size="sm"
+                        className="flex-1 gap-1 text-xs bg-green-500 hover:bg-green-600 text-white"
+                        onClick={() => handleWhatsappWithPdf("remito")}
+                      >
+                        <Send className="h-3 w-3" />
+                        WhatsApp
+                      </Button>
+                    )}
+                  </div>
                 )}
               </div>
             </div>
@@ -370,11 +384,12 @@ export function ModalDetalleVenta({
             </div>
 
             {/* Botones de acción */}
+            {/* Botones de acción */}
             <div className="flex flex-col gap-2">
               {!venta.invoiceEmitted && (
                 <Button
                   className="w-full gap-1.5"
-                  onClick={() => onEmitirBoleta(venta)} // 🔹 Boleta
+                  onClick={() => onEmitirBoleta(venta)}
                 >
                   <FileText className="h-4 w-4" />
                   Emitir Boleta
@@ -384,7 +399,7 @@ export function ModalDetalleVenta({
                 <Button
                   variant="outline"
                   className="w-full gap-1.5"
-                  onClick={() => onGenerarRemito(venta)} // 🔹 Remito
+                  onClick={() => onGenerarRemito(venta)}
                 >
                   <Truck className="h-4 w-4" />
                   Generar Remito
