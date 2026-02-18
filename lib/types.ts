@@ -64,6 +64,10 @@ export interface Sale {
   clientId?: string;
   clientName?: string;
   clientPhone?: string;
+  clientCuit?: string;
+  clientDni?: string;
+  clientEmail?: string;
+  clientAddress?: string;
   clientTaxCategory?: Client["taxCategory"];
   sellerId?: string;
   sellerName?: string;
@@ -94,7 +98,7 @@ export interface Order {
   clientName?: string;
   sellerId?: string;
   sellerName?: string;
-  items: { productId: string; quantity: number; name: string }[];
+  items: { productId: string; quantity: number; name: string; price: number }[];
   status: "pending" | "preparation" | "delivery" | "completed";
   address: string;
   createdAt: Date;

@@ -18,7 +18,7 @@ import { OrderCard } from "@/components/pedidos/order-card";
 import { OrderDetailModal } from "@/components/pedidos/order-detail-modal";
 import { PaymentModal } from "@/components/pedidos/payment-modal";
 import { SuccessModal } from "@/components/pedidos/success-modal";
-import { statusConfig, statusFlow } from "@/lib/order-constants"; //
+import { statusConfig, statusFlow } from "@/lib/order-constants";
 
 export const generateOrderNumber = (date: Date, index: number) => {
   const d = new Date(date);
@@ -55,7 +55,7 @@ export const formatDateFull = (date: Date) => {
 };
 
 export const calculateOrderTotal = (order: Order) => {
-  return order.items.reduce((acc, item) => acc + item.quantity * 2500, 0);
+  return order.items.reduce((acc, item) => acc + item.quantity * item.price, 0);
 };
 
 export default function PedidosPage() {
@@ -167,11 +167,14 @@ export default function PedidosPage() {
 
     try {
       const total = calculateOrderTotal(selectedOrder);
-      const client = clients.find((c) => c.id === selectedClientId);
+
+      // ✅ Siempre usar el clientId del pedido, sin importar el método de pago
+      const resolvedClientId = selectedClientId || selectedOrder.clientId;
+      const client = clients.find((c) => c.id === resolvedClientId);
 
       if (
         (paymentType === "credit" || paymentType === "split") &&
-        !selectedClientId
+        !resolvedClientId
       ) {
         throw new Error("Debe seleccionar un cliente para cuenta corriente");
       }
@@ -188,15 +191,18 @@ export default function PedidosPage() {
       }
 
       const sale = await salesApi.processSale({
-        clientId: paymentType === "cash" ? undefined : client?.id,
-        clientName: paymentType === "cash" ? undefined : client?.name,
-        clientPhone: paymentType === "cash" ? undefined : client?.phone,
+        // ✅ clientId y clientName siempre se pasan, sin importar el método de pago
+        clientId: resolvedClientId,
+        clientName: client?.name || selectedOrder.clientName,
+        clientPhone: client?.phone,
+        sellerId: selectedOrder.sellerId, // ✅ agregar esta línea
+        sellerName: selectedOrder.sellerName, // ✅ agregar esta línea
         items: selectedOrder.items.map((item) => ({
           product: {
             id: item.productId,
             name: item.name,
-            price: item.price, // ⚠️ Usa el precio real, no 2500 fijo
-            stock: 100, // ⚠️ Esto también debería venir del producto real
+            price: item.price,
+            stock: 100,
             description: "",
             imageUrl: "",
             category: "",
@@ -208,7 +214,6 @@ export default function PedidosPage() {
         source: "order",
         createOrder: false,
         orderId: selectedOrder.id,
-        // 👇 NUEVOS CAMPOS
         deliveryMethod:
           selectedOrder.address === "Retiro en local" ? "pickup" : "delivery",
         deliveryAddress: selectedOrder.address,
@@ -305,17 +310,14 @@ export default function PedidosPage() {
   const filteredOrders = useMemo(() => {
     let filtered = orders;
 
-    // Filtro por rol de usuario
     if (user?.role === "seller") {
       filtered = filtered.filter((o) => o.sellerId === user.sellerId);
     }
 
-    // Filtro por estado
     if (filterStatus !== "all") {
       filtered = filtered.filter((o) => o.status === filterStatus);
     }
 
-    // Filtro por búsqueda general
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase();
       filtered = filtered.filter(
@@ -326,24 +328,20 @@ export default function PedidosPage() {
       );
     }
 
-    // Filtro por cliente
     if (filterClient) {
       filtered = filtered.filter((o) => o.clientId === filterClient);
     }
 
-    // Filtro por vendedor
     if (filterSeller) {
       filtered = filtered.filter((o) => o.sellerId === filterSeller);
     }
 
-    // Filtro por fecha desde
     if (filterDateFrom) {
       const fromDate = new Date(filterDateFrom);
       fromDate.setHours(0, 0, 0, 0);
       filtered = filtered.filter((o) => new Date(o.createdAt) >= fromDate);
     }
 
-    // Filtro por fecha hasta
     if (filterDateTo) {
       const toDate = new Date(filterDateTo);
       toDate.setHours(23, 59, 59, 999);
@@ -385,7 +383,6 @@ export default function PedidosPage() {
 
   return (
     <MainLayout title="Pedidos" description="Seguimiento de pedidos y entregas">
-      {/* Header con búsqueda y filtros */}
       <div className="mb-6 space-y-4">
         <div className="flex flex-col lg:flex-row gap-3 justify-between items-start lg:items-center">
           <div className="flex items-center gap-2 w-full lg:w-auto">
@@ -438,7 +435,6 @@ export default function PedidosPage() {
         />
       </div>
 
-      {/* Lista de pedidos */}
       {loading ? (
         <DataTableSkeleton columns={5} rows={5} />
       ) : filteredOrders.length === 0 ? (
@@ -455,7 +451,6 @@ export default function PedidosPage() {
         </Card>
       ) : (
         <div className="space-y-3">
-          {/* Vista Desktop */}
           <div className="hidden lg:block bg-white border rounded-xl overflow-hidden shadow-sm">
             <table className="w-full">
               <thead className="bg-gray-50/80 border-b">
@@ -495,7 +490,6 @@ export default function PedidosPage() {
             </table>
           </div>
 
-          {/* Vista Mobile */}
           <div className="lg:hidden space-y-3">
             {filteredOrders.map((order, index) => (
               <OrderCard
@@ -514,7 +508,6 @@ export default function PedidosPage() {
         </div>
       )}
 
-      {/* Modales */}
       <OrderDetailModal
         isOpen={activeModal === "detail"}
         onClose={closeAllModals}

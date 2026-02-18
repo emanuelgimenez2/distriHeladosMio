@@ -123,15 +123,27 @@ export const processSale = async (data: {
 
   let resolvedClientName = data.clientName ?? "Venta directa";
   let resolvedTaxCategory: any;
+  let resolvedClientPhone = data.clientPhone ?? null;
+  let resolvedClientCuit: string | null = null;
+  let resolvedClientAddress: string | null = null;
+  let resolvedClientEmail: string | null = null;
+  let resolvedClientDni: string | null = null;
   let clientAddress = data.deliveryAddress;
 
+  // ✅ Tomar TODOS los datos del cliente desde Firestore
   if (data.clientId) {
     const clientRef = doc(firestore, CLIENTS_PATH, data.clientId);
     const clientSnap = await getDoc(clientRef);
     if (clientSnap.exists()) {
       const clientData = clientSnap.data();
       resolvedClientName = clientData.name ?? resolvedClientName;
-      resolvedTaxCategory = clientData.taxCategory;
+      resolvedTaxCategory = clientData.taxCategory ?? null;
+      resolvedClientPhone = clientData.phone ?? resolvedClientPhone ?? null;
+      resolvedClientCuit = clientData.cuit ?? null;
+      resolvedClientAddress = clientData.address ?? null;
+      resolvedClientEmail = clientData.email ?? null;
+      resolvedClientDni = clientData.dni ?? null;
+
       if (data.deliveryMethod === "delivery" && !data.deliveryAddress) {
         clientAddress = clientData.address ?? data.deliveryAddress;
       }
@@ -145,7 +157,11 @@ export const processSale = async (data: {
     saleNumber,
     clientId: data.clientId ?? null,
     clientName: resolvedClientName ?? null,
-    clientPhone: data.clientPhone ?? null,
+    clientPhone: resolvedClientPhone ?? null,
+    clientCuit: resolvedClientCuit ?? null,
+    clientDni: resolvedClientDni ?? null,
+    clientEmail: resolvedClientEmail ?? null,
+    clientAddress: resolvedClientAddress ?? null,
     clientTaxCategory: resolvedTaxCategory ?? null,
     sellerId: data.sellerId ?? null,
     sellerName: data.sellerName ?? null,
@@ -244,7 +260,11 @@ export const processSale = async (data: {
     saleNumber,
     clientId: data.clientId,
     clientName: resolvedClientName,
-    clientPhone: data.clientPhone,
+    clientPhone: resolvedClientPhone ?? undefined,
+    clientCuit: resolvedClientCuit ?? undefined,
+    clientDni: resolvedClientDni ?? undefined,
+    clientEmail: resolvedClientEmail ?? undefined,
+    clientAddress: resolvedClientAddress ?? undefined,
     clientTaxCategory: resolvedTaxCategory,
     sellerId: data.sellerId,
     sellerName: data.sellerName,
